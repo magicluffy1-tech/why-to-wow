@@ -125,19 +125,19 @@ textarea{min-height:84px;resize:vertical}
 const METHODS = [
   {id:1, name:"개념 명료화", goal:"애매한 말의 뜻을 분명하게 만드는 질문",
    frame:["네가 말한 ","","은(는) 정확히 무슨 뜻이야? ","","와(과) 어떻게 달라?"],
-   example:"'무겁다'는 건 무게가 크다는 거야, 밀도가 크다는 거야?"},
+   example:"“열을 만들어 준다”는 게 정확히 무슨 뜻이야? 패딩이 난로처럼 열을 내보낸다는 거야?"},
   {id:2, name:"전제 점검", goal:"짝이 당연하게 믿고 있는 숨은 조건을 꺼내는 질문",
    frame:["네 생각은 ","","를 당연하다고 본 거지? 만약 ","","라면 어떻게 될까?"],
-   example:"공기가 있는 걸 당연하게 본 거 아니야? 공기가 없는 진공이라면 어떻게 될까?"},
+   example:"패딩 속에 열을 만드는 뭔가가 있다고 당연하게 본 거지? 만약 패딩을 추운 밖에 하루 내내 두면 따뜻해질까?"},
   {id:3, name:"근거 요구", goal:"주장을 받쳐 주는 증거를 묻는 질문",
    frame:["그렇게 말할 수 있는 근거가 뭐야? ","","를 보여 주는 실험이나 자료가 있어?"],
-   example:"'항상 먼저 떨어진다'는 걸 보여 주는 실험 결과가 있어?"},
+   example:"그렇게 말할 수 있는 근거가 뭐야? 패딩이 열을 만든다는 걸 보여 주는 실험이나 경험이 있어?"},
   {id:4, name:"관점 확장", goal:"다른 입장에서 다시 보게 하는 질문",
    frame:["","의 입장에서 보면 어떻게 보일까? 반대로 생각하는 사람은 뭐라고 말할까?"],
-   example:"깃털의 입장에서 보면, 왜 늦게 떨어지는 걸까?"},
+   example:"내 몸의 입장에서 보면 어떨까? 패딩이 열을 주는 걸까, 내 몸의 열이 빠져나가는 걸 막아 주는 걸까?"},
   {id:5, name:"결과 추론", goal:"주장을 끝까지 밀고 가서 모순을 찾는 질문",
    frame:["네 말을 끝까지 밀고 가면 ","","한 상황에서도 맞을까? 그럼 ","","도 맞아야 하지 않을까?"],
-   example:"아주 무거운 것과 아주 가벼운 것을 끈으로 묶으면, 어느 쪽이 먼저 떨어져?"}
+   example:"네 말을 끝까지 밀고 가면 아무도 안 입은 패딩에서도 맞을까? 그럼 냉동실에 넣어 둔 패딩도 따뜻해야 하지 않을까?"}
 ];
 const PHASES = [
   {id:"method", label:"질문법 제시", min:"1분"},
@@ -148,6 +148,7 @@ const PHASES = [
 ];
 const CHANGES = ["내 생각이 바뀜","짝 생각이 바뀜","둘 다 그대로"];
 const DEFAULT_WRAP = "좋은 질문은 바로 답이 나오지 않고, 우리를 더 생각하게 만든다.";
+const EXAMPLE_CLAIM = "패딩은 열을 만들어 주니까 따뜻한 거야.";
 const UNITS = {
   1:["과학과 인류의 지속가능한 삶","생물의 구성과 다양성","열","물질의 상태 변화","힘의 작용","기체의 성질","태양계"],
   2:["물질의 특성","지권의 변화","빛과 파동","물질의 구성","식물과 에너지","동물과 에너지","전기와 자기","별과 우주"],
@@ -414,7 +415,7 @@ function methodCard(m, big){
     <div><span class="tag">오늘의 질문법</span></div>
     <div><div class="mname">${esc(m.name)}</div><div class="goal">${esc(m.goal)}</div></div>
     <div class="frame">${frameHtml(m)}</div>
-    ${big?`<div class="example"><div class="small muted">예시 (처음엔 보고 따라 해도 좋아요)</div><div class="serif" style="font-size:20px;margin-top:4px">${esc(m.example)}</div></div>`:""}
+    ${big?`<div class="example"><div class="small muted">예시 — 짝이 이렇게 말했다면: “${esc(EXAMPLE_CLAIM)}”</div><div class="serif" style="font-size:20px;margin-top:6px">${esc(m.example)}</div><div class="small muted" style="margin-top:6px">처음엔 보고 따라 해도 좋아요. 그다음엔 오늘 탐구 내용으로 나만의 질문을 만들어 봐요.</div></div>`:""}
   </div>`;
 }
 function railHtml(interactive){
@@ -644,7 +645,7 @@ function render(force){
   const st = document.getElementById("status");
   st.textContent = status==="connecting" ? "연결 중…" : status==="shared" ? "학급 공유 연결됨" : status==="error" ? "연결 오류" : "체험 모드 (설정 전)";
   st.className = "status" + (status==="shared"?" ok":"");
-  document.getElementById("roleSeg").hidden = !(status==="local" || wantTeacher || isTeacher);
+  document.getElementById("roleSeg").hidden = !(status==="local" || wantTeacher);
   document.getElementById("roleStudent").setAttribute("aria-pressed", String(role!=="teacher"));
   document.getElementById("roleTeacher").setAttribute("aria-pressed", String(role==="teacher"));
 }
@@ -780,7 +781,7 @@ async function connect(){
     let {data:{session}} = await sb.auth.getSession();
     if(!session){
       const {error} = await sb.auth.signInAnonymously();
-      if(error) throw new Error("익명 로그인에 실패했어요. Supabase에서 Anonymous sign-ins를 켰는지 확인해 주세요.");
+      if(error) throw new Error("익명 로그인에 실패했어요. Supabase에서 Anonymous sign-ins를 켰는지 확인해 주세요. (사유: "+(error.message||error.code||error.status||"알 수 없음")+")");
     }
     await refreshIdentity();
     const {error:roomErr} = await sb.from("rooms").select("id").limit(1);
@@ -788,7 +789,7 @@ async function connect(){
     await loadRooms();
     status = "shared";
     await loadLive();
-    if(isTeacher || wantTeacher) role="teacher"; else await followLive();   // 학생은 오늘 수업으로 자동 입장
+    if(wantTeacher) role="teacher"; else await followLive();   // 학생은 오늘 수업으로 자동 입장
     sb.channel("sq-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"rooms"}, scheduleRefetch)
       .on("postgres_changes",{event:"*",schema:"public",table:"settings"}, scheduleRefetch)
