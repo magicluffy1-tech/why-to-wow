@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Why to Wow · 학급 질문판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#F3F5F9; --panel:#FFFFFF; --ink:#18223A; --ink2:#55607A; --line:#D9DFEA;
+  --accent:#2457D6; --accent-ink:#FFFFFF; --mark:#FFD84D; --mark-ink:#3A2E00;
+  --ok:#157A4B; --warn:#B3261E; --soft:#E8EEFC;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1524; --panel:#18203A; --ink:#EEF1F8; --ink2:#A4AEC8; --line:#2C3656;
+    --accent:#7BA0FF; --accent-ink:#0B1226; --mark:#FFD84D; --mark-ink:#3A2E00;
+    --ok:#5FD39A; --warn:#FF8A80; --soft:#222C4D;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1524; --panel:#18203A; --ink:#EEF1F8; --ink2:#A4AEC8; --line:#2C3656;
+  --accent:#7BA0FF; --accent-ink:#0B1226; --mark:#FFD84D; --mark-ink:#3A2E00;
+  --ok:#5FD39A; --warn:#FF8A80; --soft:#222C4D;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:16px;line-height:1.6;min-height:100vh}
+.serif{font-family:"Gowun Batang","Nanum Myeongjo",Georgia,serif}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:980px;margin:0 auto;padding:16px}
+.top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.brand{font-weight:700;font-size:18px;margin-right:auto}
+.status{font-size:13px;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:2px 10px;background:var(--panel)}
+.status.ok{color:var(--ok);border-color:var(--ok)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.seg[hidden]{display:none}
+.seg button{border:0;background:transparent;padding:6px 14px;font-size:14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.stack>*+*{margin-top:14px}
+h1,h2,h3{margin:0;line-height:1.35}
+h2{font-size:22px}
+.muted{color:var(--ink2)}
+.small{font-size:14px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 16px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.big{padding:13px 22px;font-size:17px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+
+/* phase rail */
+.rail{display:flex;gap:6px;flex-wrap:wrap}
+.rail button{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:5px 12px;font-size:14px}
+.rail button[aria-current="step"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+.rail.static button{cursor:default}
+
+/* method */
+.mname{font-size:26px;font-weight:700}
+.goal{color:var(--ink2);margin-top:2px}
+.frame{font-family:"Gowun Batang",Georgia,serif;font-size:clamp(20px,3.4vw,28px);line-height:2;padding:14px 18px;border-left:6px solid var(--mark);background:var(--soft);border-radius:0 12px 12px 0}
+.blank{display:inline-block;min-width:3.2em;border-bottom:3px solid var(--accent);margin:0 2px;vertical-align:baseline;height:1em}
+.example{padding:12px 16px;border:1px dashed var(--line);border-radius:12px}
+.tag{display:inline-block;font-size:13px;padding:1px 9px;border-radius:999px;background:var(--mark);color:var(--mark-ink);font-weight:700}
+.tag.plain{background:var(--soft);color:var(--ink)}
+
+/* pair */
+.timer{font-size:clamp(56px,14vw,120px);font-weight:700;line-height:1;font-variant-numeric:tabular-nums;text-align:center}
+.timer.end{color:var(--warn)}
+.guide ol{margin:8px 0 0;padding-left:22px}
+.guide li{margin:6px 0}
+.nophone{background:var(--mark);color:var(--mark-ink);border-radius:12px;padding:10px 14px;font-weight:700;text-align:center}
+
+/* forms */
+label.f{display:block;font-weight:700;margin-bottom:4px}
+.hint{font-size:14px;color:var(--ink2);margin:0 0 6px}
+textarea,input[type=text],input[type=password]{width:100%;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:10px 12px;font:inherit}
+textarea{min-height:84px;resize:vertical}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1.5px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 14px}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:700}
+.notice{padding:10px 14px;border-radius:10px;background:var(--soft);font-size:14px}
+.notice.err{background:transparent;border:1px solid var(--warn);color:var(--warn)}
+.done{color:var(--ok);font-weight:700}
+
+/* share */
+.qcard{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel)}
+.qcard .left{font-family:"Gowun Batang",Georgia,serif;font-size:clamp(20px,3vw,28px);line-height:1.6;margin:6px 0}
+.qcard .first{font-size:14px;color:var(--ink2)}
+.qcard.pub{border-left:6px solid var(--mark)}
+.qgrid{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){.qgrid.two{grid-template-columns:1fr 1fr}}
+.count{font-size:clamp(48px,10vw,88px);font-weight:700;line-height:1;text-align:center}
+.wrapline{font-family:"Gowun Batang",Georgia,serif;font-size:clamp(24px,5vw,40px);line-height:1.6;text-align:center;padding:26px 10px}
+.empty{padding:26px;text-align:center;color:var(--ink2);border:1px dashed var(--line);border-radius:14px}
+.sticky{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:8px 0}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">Why to Wow <span class="muted small">학급 질문판</span></div>
+    <span id="status" class="status">연결 중…</span>
+    <div class="seg" id="roleSeg" role="group" aria-label="화면 선택" hidden>
+      <button id="roleStudent" data-act="role" data-v="student" aria-pressed="true">학생</button>
+      <button id="roleTeacher" data-act="role" data-v="teacher" aria-pressed="false">교사</button>
+    </div>
+  </div>
+  <div id="app"></div>
+</div>
+
+<script>
+/* ───────── 데이터 ───────── */
+const METHODS = [
+  {id:1, name:"개념 명료화", goal:"애매한 말의 뜻을 분명하게 만드는 질문",
+   frame:["네가 말한 ","","은(는) 정확히 무슨 뜻이야? ","","와(과) 어떻게 달라?"],
+   example:"'무겁다'는 건 무게가 크다는 거야, 밀도가 크다는 거야?"},
+  {id:2, name:"전제 점검", goal:"짝이 당연하게 믿고 있는 숨은 조건을 꺼내는 질문",
+   frame:["네 생각은 ","","를 당연하다고 본 거지? 만약 ","","라면 어떻게 될까?"],
+   example:"공기가 있는 걸 당연하게 본 거 아니야? 공기가 없는 진공이라면 어떻게 될까?"},
+  {id:3, name:"근거 요구", goal:"주장을 받쳐 주는 증거를 묻는 질문",
+   frame:["그렇게 말할 수 있는 근거가 뭐야? ","","를 보여 주는 실험이나 자료가 있어?"],
+   example:"'항상 먼저 떨어진다'는 걸 보여 주는 실험 결과가 있어?"},
+  {id:4, name:"관점 확장", goal:"다른 입장에서 다시 보게 하는 질문",
+   frame:["","의 입장에서 보면 어떻게 보일까? 반대로 생각하는 사람은 뭐라고 말할까?"],
+   example:"깃털의 입장에서 보면, 왜 늦게 떨어지는 걸까?"},
+  {id:5, name:"결과 추론", goal:"주장을 끝까지 밀고 가서 모순을 찾는 질문",
+   frame:["네 말을 끝까지 밀고 가면 ","","한 상황에서도 맞을까? 그럼 ","","도 맞아야 하지 않을까?"],
+   example:"아주 무거운 것과 아주 가벼운 것을 끈으로 묶으면, 어느 쪽이 먼저 떨어져?"}
+];
+const PHASES = [
+  {id:"method", label:"질문법 제시", min:"1분"},
+  {id:"pair",   label:"짝 활동",     min:"4분"},
+  {id:"write",  label:"질문 기록",   min:"2분"},
+  {id:"share",  label:"함께 보기",   min:"2분"},
+  {id:"wrap",   label:"한 줄 정리",  min:"1분"}
+];
+const CHANGES = ["내 생각이 바뀜","짝 생각이 바뀜","둘 다 그대로"];
+const DEFAULT_WRAP = "좋은 질문은 바로 답이 나오지 않고, 우리를 더 생각하게 만든다.";
+const UNITS = {
+  1:["과학과 인류의 지속가능한 삶","생물의 구성과 다양성","열","물질의 상태 변화","힘의 작용","기체의 성질","태양계"],
+  2:["물질의 특성","지권의 변화","빛과 파동","물질의 구성","식물과 에너지","동물과 에너지","전기와 자기","별과 우주"],
+  3:["화학 반응의 규칙과 에너지 변화","기권과 날씨","운동과 에너지","자극과 반응","생식과 유전","에너지 전환과 보존","별과 우주","과학기술과 인류 문명"]
+};
+const unitLabel = (i,name) => `${i+1}단원 ${name}`;
+const GUIDE = [
+  "<b>가위바위보</b>로 질문자를 정해요.",
+  "질문자는 오늘의 질문법으로 <b>짝의 주장에 질문 1개</b>를 던져요.",
+  "답을 들으면 <b>“왜 그렇게 생각해?”</b>로 한 번 더 물어요.",
+  "역할을 바꿔서 한 번 더 해요.",
+  "끝나면 <b>우리 둘 다 아직 모르겠는 것</b>을 하나 떠올려요."
+];
+const defaultSess = () => ({round:1, phase:"method", methodId:2, pairMin:4, pairEndsAt:0, featured:[], wrap:DEFAULT_WRAP});
+
+/* ═════════ Supabase 설정 (README의 2단계에서 얻은 값을 붙여 넣으세요) ═════════
+   anon key는 공개되어도 되는 키입니다. 보안은 setup.sql의 RLS 규칙이 지킵니다.
+   아래 두 값을 채우지 않으면 "체험 모드"(이 기기에서만 작동)로 열립니다. */
+const SUPABASE_URL = "https://lopmvijgfdmqcxhjchks.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_ZaqR-WITrXlyRLyIRT_Ocw_j7EliuoM";
+
+/* ───────── 상태 ───────── */
+// 교사 전용 주소: 주소 끝에 #teacher (학생 주소에는 교사 버튼이 나타나지 않아요)
+const wantTeacher = /(^|[?&#])teacher(\b|$)/.test(location.search + location.hash);
+const configured = !/YOUR_/.test(SUPABASE_URL + SUPABASE_ANON_KEY);
+let sb = null;
+let status = "connecting";      // connecting | shared | local | error
+let errMsg = "";
+let myId = "local-" + Math.random().toString(36).slice(2,8);
+let isTeacher = false;
+let role = "student";
+let canWrite = null;
+let rooms = [];                 // 수업방 목록 {id, grade, unit, active, ...수업 상태}
+let roomId = null;              // 지금 들어가 있는 수업방
+let roomMode = "manual";        // live(오늘 수업 자동 입장) | manual(학생이 직접 선택) | teacher
+let liveRoomId = null;          // 교사가 지정한 ‘오늘 수업’
+let sess = defaultSess();       // 지금 수업방의 상태
+let pickGrade = null;           // 목록에서 고른 학년 (null = 전체)
+let newGrade = 1, newUnit = "";
+let hideList = false;
+let questions = {};             // id -> {roomId,round,name,first,left,change,at}
+let mine = null;
+let draft = {name:"", first:"", left:"", change:""};
+let wrapDraft = null;
+let busy = false, msg = "", loginMsg = "", notice = "";
+let pendingRender = false;
+const $app = document.getElementById("app");
+
+try { draft.name = localStorage.getItem("sq_name") || ""; } catch(e){}
+
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const method = () => METHODS.find(m=>m.id===sess.methodId) || METHODS[1];
+const phaseIdx = () => Math.max(0, PHASES.findIndex(p=>p.id===sess.phase));
+const remainingMs = () => Math.max(0, (sess.pairEndsAt||0) - Date.now());
+const fmt = ms => { const s=Math.ceil(ms/1000); return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); };
+const roundQuestions = () => Object.entries(questions).filter(([,q])=>q && q.roomId===roomId && q.round===sess.round).map(([id,q])=>({id,...q})).sort((a,b)=>(a.at||0)-(b.at||0));
+const curRoom = () => rooms.find(r=>r.id===roomId);
+const roomLabel = r => r ? `${r.grade}학년 · ${r.unit}` : "";
+const siteLink = () => location.origin + location.pathname;
+
+/* ───────── 행 ↔ 객체 변환 ───────── */
+const roomFromRow = r => ({id:r.id, grade:r.grade, unit:r.unit, active:r.active,
+  round:r.round, phase:r.phase, methodId:r.method_id, pairMin:r.pair_min,
+  pairEndsAt:Number(r.pair_ends_at)||0, featured:Array.isArray(r.featured)?r.featured:[], wrap:r.wrap||DEFAULT_WRAP});
+const sessToRow = s => ({round:s.round, phase:s.phase, method_id:s.methodId, pair_min:s.pairMin,
+  pair_ends_at:s.pairEndsAt, featured:s.featured, wrap:s.wrap});
+const qFromRow = r => ({roomId:r.room_id, round:r.round, name:r.student_name, first:r.first_q, left:r.left_q,
+  change:r.change_note, at:new Date(r.created_at).getTime()});
+const localKey = () => `${myId}:${roomId}:${sess.round}`;
+
+/* ───────── 수업방 ───────── */
+function applySess(next){
+  const prev = sess.round;
+  sess = {...defaultSess(), ...next};
+  if(sess.round !== prev){ mine=null; msg=""; wrapDraft=null; draft.first=""; draft.left=""; draft.change=""; }
+}
+async function loadRooms(){
+  if(!sb) return;
+  const {data, error} = await sb.from("rooms").select("*").order("grade").order("created_at");
+  if(!error && data){ rooms = data.map(roomFromRow); sortRooms(); }
+}
+function sortRooms(){
+  rooms.sort((a,b)=> a.grade-b.grade || (parseInt(a.unit)||999)-(parseInt(b.unit)||999));
+}
+const hasRoom = (g,u) => rooms.some(r=>r.grade===g && r.unit===u);
+function leaveRoom(text){
+  roomId = null; mine = null; if(sb) questions = {}; wrapDraft = null; msg = "";
+  notice = text || "";
+}
+async function enterRoom(id, mode){
+  roomMode = mode || "manual";
+  roomId = id; mine = null; if(sb) questions = {}; msg = ""; notice = ""; wrapDraft = null;
+  draft.first=""; draft.left=""; draft.change="";
+  sess = {...defaultSess(), round:0};
+  await loadSession();
+  if(roomId && isTeacher) await loadQuestions();
+  if(roomId && status==="local") loadMine();
+  render(true);
+}
+async function loadSession(){
+  if(!roomId) return false;
+  const before = JSON.stringify(sess), prevRound = sess.round;
+  if(!sb){
+    const r = rooms.find(x=>x.id===roomId);
+    if(!r){ leaveRoom("수업방을 찾을 수 없어요."); return true; }
+    applySess(r); return JSON.stringify(sess)!==before;
+  }
+  const {data, error} = await sb.from("rooms").select("*").eq("id",roomId).maybeSingle();
+  if(error) return false;
+  if(!data){ leaveRoom("이 수업방은 닫혔거나 없어졌어요. 다른 단원을 선택해 주세요."); return true; }
+  const room = roomFromRow(data);
+  const i = rooms.findIndex(x=>x.id===room.id); if(i>=0) rooms[i]=room; else rooms.push(room);
+  applySess(room);
+  if(sess.round !== prevRound && !isTeacher) await loadMine();
+  return JSON.stringify(sess)!==before;
+}
+async function loadQuestions(){
+  if(!sb || !isTeacher || !roomId) return;
+  const {data, error} = await sb.from("questions").select("*").eq("room_id", roomId).eq("round", sess.round);
+  if(error) return;
+  const m = {}; data.forEach(r=>{ m[r.id] = qFromRow(r); });
+  questions = m;
+}
+async function loadMine(){
+  if(!roomId) return;
+  if(!sb){ const q = questions[localKey()]; if(q){ mine=q; draft={name:q.name, first:q.first, left:q.left, change:q.change}; } return; }
+  const {data} = await sb.from("questions").select("*").eq("user_id", myId).eq("room_id", roomId).eq("round", sess.round).maybeSingle();
+  if(data){ mine = qFromRow(data); draft = {name:data.student_name||draft.name, first:data.first_q, left:data.left_q, change:data.change_note}; }
+}
+async function createRoom(){
+  const unit = newUnit.trim();
+  if(!unit){ msg="단원 이름을 입력해 주세요."; render(true); return; }
+  if(hasRoom(newGrade, unit)){ msg="이미 있는 수업방이에요. 목록에서 들어가 주세요."; render(true); return; }
+  msg = "";
+  if(sb){
+    const {data, error} = await sb.from("rooms").insert({grade:newGrade, unit}).select().single();
+    if(error){ msg="수업방을 만들지 못했어요. 교사 로그인 상태를 확인해 주세요."; render(true); return; }
+    rooms.push(roomFromRow(data)); sortRooms(); newUnit=""; await enterRoom(data.id,"teacher");
+  } else {
+    const r = {id:"room-"+Date.now(), grade:newGrade, unit, active:true, ...defaultSess()};
+    rooms.push(r); sortRooms(); newUnit=""; await enterRoom(r.id,"teacher");
+  }
+}
+
+/* ───────── 오늘 수업 (교사가 지정 → 학생 자동 입장) ───────── */
+async function loadLive(){
+  if(!sb) return;
+  const {data, error} = await sb.from("settings").select("live_room_id").eq("id",1).maybeSingle();
+  if(!error) liveRoomId = data ? data.live_room_id : null;
+}
+async function setLive(id){
+  const r = rooms.find(x=>x.id===id); if(!r) return;
+  if(sb){
+    let res = await sb.from("rooms").update({active:true}).eq("id",id);
+    if(!res.error) res = await sb.from("settings").update({live_room_id:id}).eq("id",1);
+    if(res.error){ msg="오늘 수업으로 열지 못했어요. 교사 로그인 상태를 확인해 주세요."; render(true); return; }
+  }
+  r.active = true; liveRoomId = id; msg = "학생 화면이 이 수업방으로 자동으로 들어와요."; render(true);
+}
+async function clearLive(){
+  if(sb){
+    const {error} = await sb.from("settings").update({live_room_id:null}).eq("id",1);
+    if(error){ msg="열기를 해제하지 못했어요."; render(true); return; }
+  }
+  liveRoomId = null; msg = ""; render(true);
+}
+// 학생 화면: 오늘 수업이 있으면 자동으로 따라 들어가기
+async function followLive(){
+  if(role==="teacher") return;
+  const visible = liveRoomId && rooms.some(r=>r.id===liveRoomId && r.active);
+  if(visible){
+    if(roomId!==liveRoomId) await enterRoom(liveRoomId,"live");
+  } else if(roomId && (roomMode==="live" || roomMode==="teacher")){
+    leaveRoom("지금은 열린 수업이 없어요. 선생님이 수업을 열면 자동으로 들어가요.");
+  }
+}
+// 기본 단원 수업방 한꺼번에 만들기 (학생에게는 숨긴 채로 준비해 둠)
+async function createPresets(grades){
+  const rows = [];
+  grades.forEach(g=>UNITS[g].forEach((name,i)=>{ const u = unitLabel(i,name); if(!hasRoom(g,u)) rows.push({grade:g, unit:u, active:false}); }));
+  if(!rows.length){ msg="이미 모두 만들어져 있어요."; render(true); return; }
+  if(sb){
+    const {data, error} = await sb.from("rooms").insert(rows).select();
+    if(error){ msg="수업방을 만들지 못했어요. 교사 로그인 상태를 확인해 주세요."; render(true); return; }
+    data.forEach(r=>rooms.push(roomFromRow(r)));
+  } else {
+    rows.forEach((r,k)=>rooms.push({id:"room-"+Date.now()+"-"+k, ...r, ...defaultSess()}));
+  }
+  sortRooms(); msg = `수업방 ${rows.length}개를 만들었어요. 수업할 때 ‘오늘 수업으로 열기’를 누르세요.`; render(true);
+}
+async function setRoomActive(id, val){
+  const r = rooms.find(x=>x.id===id); if(!r) return;
+  if(sb){
+    const {error} = await sb.from("rooms").update({active:val}).eq("id",id);
+    if(error){ msg="변경하지 못했어요."; render(true); return; }
+  }
+  r.active = val;
+  if(!val && liveRoomId===id) await clearLive(); else render(true);
+}
+async function deleteRoom(id){
+  if(sb){
+    const {error} = await sb.from("rooms").delete().eq("id",id);
+    if(error){ msg="삭제하지 못했어요."; render(true); return; }
+  }
+  rooms = rooms.filter(x=>x.id!==id);
+  if(liveRoomId===id) liveRoomId = null;
+  if(roomId===id) leaveRoom();
+  render(true);
+}
+
+/* ───────── 수업 진행 · 질문 ───────── */
+async function saveSess(patch){
+  sess = {...sess, ...patch};
+  render(true);
+  if(!roomId) return;
+  if(sb){
+    const {error} = await sb.from("rooms").update(sessToRow(sess)).eq("id",roomId);
+    if(error){ msg = "수업 상태를 저장하지 못했어요. 교사 로그인 상태를 확인해 주세요."; render(true); }
+  } else {
+    const i = rooms.findIndex(r=>r.id===roomId); if(i>=0) rooms[i] = {...rooms[i], ...sess};
+  }
+}
+async function submitQuestion(){
+  const data = {roomId, round:sess.round, name:draft.name.trim(), first:draft.first.trim(), left:draft.left.trim(), change:draft.change, at:Date.now()};
+  busy = true; msg = ""; render(true);
+  try{
+    if(sb){
+      const {error} = await sb.from("questions").upsert(
+        {user_id:myId, room_id:roomId, round:sess.round, student_name:data.name, first_q:data.first, left_q:data.left, change_note:data.change, method_id:sess.methodId},
+        {onConflict:"user_id,room_id,round"});
+      if(error) throw error;
+    } else { questions[localKey()] = data; }
+    mine = data;
+    try{ localStorage.setItem("sq_name", data.name); }catch(e){}
+    msg = "ok";
+  }catch(e){
+    msg = "질문을 올리지 못했어요. 수업이 새로 시작됐거나 수업방이 닫혔다면 화면을 새로고침해 주세요.";
+  }
+  busy = false; render(true);
+}
+async function deleteQuestion(id){
+  if(sb){
+    const {error} = await sb.from("questions").delete().eq("id", id);
+    if(error){ msg = "삭제하지 못했어요."; render(true); return; }
+  }
+  delete questions[id];
+  if(sess.featured.some(f=>f.id===id)) await saveSess({featured:sess.featured.filter(f=>f.id!==id)});
+  render(true);
+}
+function toggleFeature(id){
+  const q = roundQuestions().find(x=>x.id===id); if(!q) return;
+  let f = sess.featured.slice();
+  if(f.some(x=>x.id===id)) f = f.filter(x=>x.id!==id);
+  else { if(f.length>=5){ msg="공개는 최대 5개까지예요."; render(true); return; } f.push({id, first:q.first, left:q.left, change:q.change}); }
+  msg = ""; saveSess({featured:f});
+}
+
+/* ───────── 화면 조각 ───────── */
+function frameHtml(m){
+  return m.frame.map((t,i)=> i%2===1 ? '<span class="blank" aria-label="빈칸"></span>' : esc(t)).join("");
+}
+function methodCard(m, big){
+  return `<div class="card stack">
+    <div><span class="tag">오늘의 질문법</span></div>
+    <div><div class="mname">${esc(m.name)}</div><div class="goal">${esc(m.goal)}</div></div>
+    <div class="frame">${frameHtml(m)}</div>
+    ${big?`<div class="example"><div class="small muted">예시 (처음엔 보고 따라 해도 좋아요)</div><div class="serif" style="font-size:20px;margin-top:4px">${esc(m.example)}</div></div>`:""}
+  </div>`;
+}
+function railHtml(interactive){
+  const i = phaseIdx();
+  return `<div class="rail ${interactive?"":"static"}" aria-label="수업 단계">` + PHASES.map((p,k)=>
+    `<button ${interactive?`data-act="goto" data-v="${p.id}"`:"tabindex='-1'"} ${k===i?'aria-current="step"':""}>${k+1}. ${p.label} <span class="muted small" style="${k===i?"color:inherit;opacity:.8":""}">${p.min}</span></button>`
+  ).join("") + `</div>`;
+}
+function pairHtml(teacher){
+  const rem = remainingMs();
+  return `<div class="card stack">
+    <div class="timer ${rem===0?"end":""}" id="timer" role="timer" aria-live="off">${sess.pairEndsAt? fmt(rem) : fmt(sess.pairMin*60000)}</div>
+    <div class="nophone">📵 화면은 내려놓고, 서로 눈을 보며 말해요!</div>
+    <div class="guide card" style="background:var(--soft);border:0">
+      <h3>짝 질문 활동 방법</h3>
+      <ol>${GUIDE.map(g=>`<li>${g}</li>`).join("")}</ol>
+    </div>
+    <div class="small muted">오늘의 질문법: <b>${esc(method().name)}</b> — ${esc(method().goal)}</div>
+  </div>`;
+}
+function formHtml(){
+  const m = method();
+  const d = draft;
+  const ready = d.name.trim() && d.first.trim() && d.left.trim() && d.change;
+  const blocked = canWrite === false;
+  return `<div class="card stack">
+    <div class="row"><span class="tag">${esc(m.name)}</span><span class="muted small">짝 활동을 끝낸 뒤 적어요</span></div>
+    ${blocked?`<div class="notice err">이 화면에서는 질문을 올릴 수 없어요. 선생님께 로그인 상태를 확인해 달라고 말씀드리세요.</div>`:""}
+    <div><label class="f" for="name">이름</label>
+      <input type="text" id="name" data-f="name" maxlength="12" value="${esc(d.name)}" placeholder="예: 김민준"></div>
+    <div><label class="f" for="first">① 내가 처음에 던진 질문</label>
+      <p class="hint">짝에게 가장 먼저 물어본 질문을 한 줄로 적어요.</p>
+      <textarea id="first" data-f="first" maxlength="120">${esc(d.first)}</textarea></div>
+    <div><label class="f" for="left">② 대화 후 남은 질문</label>
+      <p class="hint">짝과 이야기하다가 우리 둘 다 <b>아직 모르겠는 것</b>을 적어요.</p>
+      <textarea id="left" data-f="left" maxlength="140">${esc(d.left)}</textarea></div>
+    <div><label class="f">③ 짝 대화에서 바뀐 점</label>
+      <div class="chips">${CHANGES.map(c=>`<button class="chip" data-act="change" data-v="${esc(c)}" aria-pressed="${d.change===c}">${esc(c)}</button>`).join("")}</div></div>
+    <div class="row">
+      <button class="btn primary big" data-act="submit" ${(!ready||busy||blocked)?"disabled":""}>${mine&&mine.round===sess.round?"질문 고쳐서 다시 올리기":"질문 올리기"}</button>
+      ${msg==="ok"?`<span class="done">✔ 올렸어요. 선생님이 공개할 때까지 기다려요.</span>`:""}
+    </div>
+    ${msg && msg!=="ok" ? `<div class="notice err">${esc(msg)}</div>`:""}
+  </div>`;
+}
+function pubCards(){
+  const f = sess.featured;
+  if(!f.length) return `<div class="empty">선생님이 함께 볼 질문을 고르고 있어요.</div>`;
+  return `<div class="qgrid ${f.length>1?"two":""}">` + f.map(q=>`
+    <div class="qcard pub">
+      <div class="first">처음엔: ${esc(q.first)}</div>
+      <div class="left">${esc(q.left)}</div>
+      ${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}
+    </div>`).join("") + `</div>`;
+}
+function wrapHtml(){
+  return `<div class="card"><div class="wrapline">${esc(sess.wrap)}</div></div>`;
+}
+
+/* ───────── 학생 화면 ───────── */
+function studentView(){
+  const p = sess.phase;
+  if(p==="method") return `<div class="stack">${methodCard(method(), true)}<div class="notice">곧 짝 활동이 시작돼요. 문장틀을 눈으로 읽어 두세요.</div></div>`;
+  if(p==="pair"){
+    if(sess.pairEndsAt && remainingMs()===0) return `<div class="stack"><div class="notice">시간이 끝났어요! 이제 질문을 기록해요.</div>${formHtml()}</div>`;
+    return pairHtml(false);
+  }
+  if(p==="write") return formHtml();
+  if(p==="share") return `<div class="stack"><h2>우리 반이 함께 생각할 질문</h2>${pubCards()}</div>`;
+  return wrapHtml();
+}
+
+/* ───────── 교사 화면 ───────── */
+function teacherView(){
+  const p = sess.phase, idx = phaseIdx();
+  const qs = roundQuestions();
+  const isLiveNow = liveRoomId===roomId;
+  const ctrl = `<div class="card stack sticky" style="padding:12px 14px">
+    <div class="row"><span class="tag">${esc(String(curRoom()?curRoom().grade:""))}학년</span><b>${esc(curRoom()?curRoom().unit:"")}</b>
+      ${isLiveNow?`<span class="tag">● 오늘 수업</span>`:""}<span class="grow"></span>
+      ${isLiveNow?`<button class="btn" data-act="unlive">열기 해제</button>`:`<button class="btn primary" data-act="golive" data-v="${esc(roomId)}">오늘 수업으로 열기</button>`}
+      <button class="btn" data-act="copylink">학생 주소 복사</button>
+      <button class="btn" data-act="leave">수업방 바꾸기</button></div>
+    ${isLiveNow?"":`<div class="notice">아직 학생들이 이 수업방으로 들어오지 않아요. ‘오늘 수업으로 열기’를 누르면 학생 화면이 자동으로 이 방으로 바뀌어요.</div>`}
+    ${railHtml(true)}
+    <div class="row">
+      <button class="btn" data-act="prev" ${idx===0?"disabled":""}>이전 단계</button>
+      <button class="btn primary" data-act="next" ${idx===PHASES.length-1?"disabled":""}>다음 단계</button>
+      <span class="grow"></span>
+      <span class="small muted">제출 ${qs.length}명</span>
+      <button class="btn danger" data-act="newround">새 수업 시작</button>
+    </div>
+    <div class="row">
+      <span class="small muted">오늘의 질문법</span>
+      <div class="chips">${METHODS.map(m=>`<button class="chip" data-act="method" data-v="${m.id}" aria-pressed="${sess.methodId===m.id}">${esc(m.name)}</button>`).join("")}</div>
+    </div>
+    ${msg && msg!=="ok" ? `<div class="notice ${/못했|최대/.test(msg)?"err":""}">${esc(msg)}</div>`:""}
+  </div>`;
+  let body = "";
+  if(p==="method"){
+    body = methodCard(method(), true);
+  } else if(p==="pair"){
+    body = pairHtml(true) + `<div class="row">
+      <button class="btn primary" data-act="timer">타이머 ${sess.pairEndsAt?"다시 ":""}시작</button>
+      <span class="small muted">시간(분)</span>
+      <div class="chips">${[3,4,5].map(n=>`<button class="chip" data-act="min" data-v="${n}" aria-pressed="${sess.pairMin===n}">${n}</button>`).join("")}</div>
+    </div>`;
+  } else if(p==="write"){
+    body = `<div class="card stack"><div class="small muted" style="text-align:center">질문 제출 현황</div><div class="count" id="cnt">${qs.length}</div><div class="small muted" style="text-align:center">질문 내용은 공개 단계 전까지 학생 화면에 보이지 않아요.</div></div>
+      ${methodCard(method(), false)}`;
+  } else if(p==="share"){
+    const pubIds = new Set(sess.featured.map(f=>f.id));
+    body = `<div class="stack">
+      <div class="card stack">
+        <div class="row"><h3>제출된 질문 (교사 전용)</h3><span class="grow"></span><span class="small muted">2~3개를 골라 공개해요 · 최대 5개</span><button class="btn" data-act="togglelist">${hideList?"목록 펼치기":"목록 접기"}</button></div>
+        ${hideList? `<div class="empty">교사 전용 목록이 접혀 있어요 (큰 화면용). 공개한 질문만 아래에 보여요.</div>` : qs.length? `<div class="qgrid">`+qs.map(q=>`
+          <div class="qcard">
+            <div class="small muted">${esc(q.name||"이름 없음")}</div>
+            <div class="first">처음엔: ${esc(q.first)}</div>
+            <div class="left" style="font-size:19px">${esc(q.left)}</div>
+            <div class="row">${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}<span class="grow"></span>
+              <button class="btn ${pubIds.has(q.id)?"primary":""}" data-act="feat" data-v="${esc(q.id)}">${pubIds.has(q.id)?"공개 중 ★":"공개하기"}</button>
+              <button class="btn danger" data-act="del" data-v="${esc(q.id)}" aria-label="삭제">삭제</button>
+            </div>
+          </div>`).join("")+`</div>` : `<div class="empty">아직 제출된 질문이 없어요.</div>`}
+      </div>
+      <div><h2 style="margin-bottom:10px">공개된 질문 (학생 화면과 같아요)</h2>${pubCards()}</div>
+    </div>`;
+  } else {
+    if(wrapDraft===null) wrapDraft = sess.wrap;
+    body = wrapHtml() + `<div class="card stack">
+      <label class="f" for="wrapin">한 줄 정리 고치기</label>
+      <textarea id="wrapin" data-f="wrap" maxlength="80">${esc(wrapDraft)}</textarea>
+      <div class="row"><button class="btn primary" data-act="savewrap">학생 화면에 반영</button></div>
+    </div>`;
+  }
+  return `<div class="stack">${ctrl}${body}</div>`;
+}
+
+/* ───────── 수업방 선택 화면 ───────── */
+function gradeChips(selected, act, withAll){
+  const items = (withAll?[[0,"전체"]]:[]).concat([[1,"1학년"],[2,"2학년"],[3,"3학년"]]);
+  return `<div class="chips">${items.map(([v,l])=>`<button class="chip" data-act="${act}" data-v="${v}" aria-pressed="${(selected||0)===v}">${l}</button>`).join("")}</div>`;
+}
+function roomBar(){
+  const r = curRoom();
+  return `<div class="card row" style="padding:10px 14px"><span class="tag">${r?r.grade:sess.grade||""}학년</span><b>${esc(r?r.unit:"")}</b><span class="grow"></span>${roomMode==="manual"?'<button class="btn" data-act="leave">다른 단원 선택</button>':""}</div>`;
+}
+function studentPicker(){
+  const list = rooms.filter(r=>r.active && pickGrade && r.grade===pickGrade);
+  return `<div class="card stack">
+    <h2>어느 수업에 참여할까요?</h2>
+    <div class="notice">${notice?esc(notice):"선생님이 오늘 수업을 열면 자동으로 들어가요."} 아직 열리지 않았다면 아래에서 직접 골라도 돼요.</div>
+    <div><label class="f">① 학년을 골라요</label>${gradeChips(pickGrade,"pgrade",false)}</div>
+    ${pickGrade? `<div><label class="f">② 단원을 골라요</label>
+      ${list.length? `<div class="stack">${list.map(r=>`<button class="btn big" style="width:100%;text-align:left" data-act="enter" data-v="${esc(r.id)}">${esc(r.unit)}</button>`).join("")}</div>`
+        : `<div class="empty">아직 열린 수업이 없어요. 선생님이 수업방을 열면 여기에 나타나요.</div>`}</div>` : ""}
+  </div>`;
+}
+function teacherPicker(){
+  const list = rooms.filter(r=>!pickGrade || r.grade===pickGrade);
+  return `<div class="stack">
+    <div class="card stack">
+      <div class="row"><h2>수업방 선택</h2><span class="grow"></span>${status==="shared"?'<button class="btn" data-act="copylink">학생 주소 복사</button>':""}${status==="shared"?'<button class="btn" data-act="logout">로그아웃</button>':""}</div>
+      ${notice?`<div class="notice">${esc(notice)}</div>`:""}
+      ${liveRoomId && rooms.find(r=>r.id===liveRoomId) ? `<div class="notice">● 오늘 수업: <b>${esc(roomLabel(rooms.find(r=>r.id===liveRoomId)))}</b> — 학생들은 접속하면 이 수업방으로 자동으로 들어와요. <button class="btn" data-act="unlive">열기 해제</button></div>` : `<div class="notice">아직 오늘 수업이 정해지지 않았어요. 수업방을 골라 ‘오늘 수업으로 열기’를 누르세요.</div>`}
+      ${gradeChips(pickGrade,"pgrade",true)}
+      ${list.length? `<div class="stack">${list.map(r=>`
+        <div class="qcard">
+          <div class="row"><span class="tag ${r.active?"":"plain"}">${r.grade}학년</span><b>${esc(r.unit)}</b>
+            ${r.id===liveRoomId?'<span class="tag">● 오늘 수업</span>':""}${r.active?"":'<span class="small muted">(학생에게 숨김)</span>'}<span class="grow"></span>
+            ${r.id===liveRoomId?"":`<button class="btn" data-act="golive" data-v="${esc(r.id)}">오늘 수업으로 열기</button>`}
+            <button class="btn primary" data-act="enter" data-v="${esc(r.id)}">들어가기</button>
+            <button class="btn" data-act="ractive" data-v="${esc(r.id)}">${r.active?"숨기기":"보이기"}</button>
+            <button class="btn danger" data-act="rdel" data-v="${esc(r.id)}">삭제</button>
+          </div>
+        </div>`).join("")}</div>` : `<div class="empty">아직 수업방이 없어요. 아래에서 ‘단원 수업방 한꺼번에 만들기’를 눌러 보세요.</div>`}
+    </div>
+    <div class="card stack">
+      <h3>새 수업방 만들기</h3>
+      <div><label class="f">학년</label>${gradeChips(newGrade,"ngrade",false)}</div>
+      <div class="row">
+        <button class="btn" data-act="bulkgrade">${newGrade}학년 단원 수업방 모두 만들기</button>
+        <button class="btn" data-act="bulkall">1~3학년 전체 만들기</button>
+      </div>
+      <div><label class="f">단원을 눌러 하나만 만들기</label>
+        <div class="chips">${UNITS[newGrade].map((name,i)=>{ const u=unitLabel(i,name); const ex=hasRoom(newGrade,u);
+          return `<button class="chip" data-act="punit" data-v="${i}" aria-pressed="${newUnit===u}">${ex?"✓ ":""}${esc(u)}</button>`; }).join("")}</div></div>
+      <div><label class="f" for="nunit">또는 직접 입력</label>
+        <input type="text" id="nunit" data-f="nunit" maxlength="40" value="${esc(newUnit)}" placeholder="예: 3단원 힘과 운동"></div>
+      <div class="row"><button class="btn primary" data-act="rcreate">수업방 만들기</button></div>
+      ${msg && msg!=="ok"?`<div class="notice ${/못했|이미 있는|입력/.test(msg)?"err":""}">${esc(msg)}</div>`:""}
+      <p class="hint">같은 단원을 여러 반에서 쓸 때는 하나의 수업방을 쓰고, 반이 바뀔 때마다 ‘새 수업 시작’을 누르면 됩니다.</p>
+    </div>
+  </div>`;
+}
+
+/* ───────── 렌더 ───────── */
+function loginView(){
+  return `<div class="card stack" style="max-width:420px;margin:0 auto">
+    <h2>교사 로그인</h2>
+    <p class="hint">교사로 등록된 계정만 수업을 조작할 수 있어요.</p>
+    <div><label class="f" for="lemail">이메일</label>
+      <input type="text" id="lemail" inputmode="email" autocomplete="username" autocapitalize="off"></div>
+    <div><label class="f" for="lpw">비밀번호</label>
+      <input type="password" id="lpw" autocomplete="current-password"></div>
+    <div class="row"><button class="btn primary" data-act="login" ${busy?"disabled":""}>로그인</button>
+      <button class="btn" data-act="role" data-v="student">학생 화면으로</button></div>
+    ${loginMsg?`<div class="notice err">${esc(loginMsg)}</div>`:""}
+  </div>`;
+}
+function render(force){
+  const a = document.activeElement;
+  if(!force && a && a.matches && a.matches("textarea,input[type=text],input[type=password]") && $app.contains(a)){ pendingRender = true; return; }
+  pendingRender = false;
+  let fid=null, ss=0, se=0;
+  if(a && a.id && $app.contains(a) && a.selectionStart!=null){ fid=a.id; ss=a.selectionStart; se=a.selectionEnd; }
+  const teacherOK = isTeacher || status==="local";
+  let html;
+  if(role==="teacher" && !teacherOK) html = loginView();
+  else if(role==="teacher") html = roomId ? teacherView() : teacherPicker();
+  else if(!roomId) html = studentPicker();
+  else html = `<div class="stack">${roomBar()}<div class="card" style="padding:10px 14px">${railHtml(false)}</div>${studentView()}</div>`;
+  if(status==="error") html = `<div class="notice err" style="margin-bottom:12px">${esc(errMsg)}</div>` + html;
+  $app.innerHTML = html;
+  if(fid){ const el=document.getElementById(fid); if(el){ el.focus(); try{el.setSelectionRange(ss,se);}catch(e){} } }
+  const st = document.getElementById("status");
+  st.textContent = status==="connecting" ? "연결 중…" : status==="shared" ? "학급 공유 연결됨" : status==="error" ? "연결 오류" : "체험 모드 (설정 전)";
+  st.className = "status" + (status==="shared"?" ok":"");
+  document.getElementById("roleSeg").hidden = !(status==="local" || wantTeacher || isTeacher);
+  document.getElementById("roleStudent").setAttribute("aria-pressed", String(role!=="teacher"));
+  document.getElementById("roleTeacher").setAttribute("aria-pressed", String(role==="teacher"));
+}
+
+/* ───────── 이벤트 ───────── */
+document.addEventListener("input", e=>{
+  const f = e.target.dataset && e.target.dataset.f; if(!f) return;
+  if(f==="wrap") { wrapDraft = e.target.value; return; }
+  if(f==="nunit") { newUnit = e.target.value; return; }
+  draft[f] = e.target.value;
+  const btn = document.querySelector('[data-act="submit"]');
+  if(btn) btn.disabled = !(draft.name.trim()&&draft.first.trim()&&draft.left.trim()&&draft.change) || busy || canWrite===false;
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="Enter" && e.target.id==="lpw") doLogin();
+  if(e.key==="Enter" && e.target.id==="nunit") createRoom();
+});
+document.addEventListener("focusout", ()=>{ setTimeout(()=>{ if(pendingRender) render(); },50); });
+async function copyLink(){
+  const url = siteLink();
+  try{ await navigator.clipboard.writeText(url); msg="학생 접속 주소를 복사했어요."; }
+  catch(e){ window.prompt("이 주소를 복사해 학생들에게 알려 주세요. (학년·단원은 고를 필요 없어요)", url); msg=""; }
+  render(true);
+}
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-act]"); if(!t) return;
+  const act = t.dataset.act, v = t.dataset.v;
+  const idx = phaseIdx();
+  const go = id => {
+    const patch = {phase:id};
+    if(id==="pair") patch.pairEndsAt = Date.now() + sess.pairMin*60000;
+    msg=""; saveSess(patch);
+  };
+  if(act==="role"){
+    role=v; loginMsg=""; msg=""; if(v==="teacher") notice="";
+    if(v==="student") followLive().then(()=>render(true));
+    render(true);
+  }
+  else if(act==="pgrade"){ pickGrade = Number(v)||null; render(true); }
+  else if(act==="ngrade"){ newGrade = Number(v); newUnit=""; msg=""; render(true); }
+  else if(act==="enter") enterRoom(v, role==="teacher"?"teacher":"manual");
+  else if(act==="golive") setLive(v);
+  else if(act==="unlive") clearLive();
+  else if(act==="leave"){ leaveRoom(); render(true); }
+  else if(act==="rcreate") createRoom();
+  else if(act==="punit"){ newUnit = unitLabel(Number(v), UNITS[newGrade][Number(v)]); msg=""; render(true); }
+  else if(act==="bulkgrade") createPresets([newGrade]);
+  else if(act==="bulkall") createPresets([1,2,3]);
+  else if(act==="ractive"){ const r=rooms.find(x=>x.id===v); if(r) setRoomActive(v, !r.active); }
+  else if(act==="rdel"){ const r=rooms.find(x=>x.id===v); if(r && confirm(`'${roomLabel(r)}' 수업방과 안의 모든 질문을 삭제할까요?`)) deleteRoom(v); }
+  else if(act==="copylink") copyLink();
+  else if(act==="togglelist"){ hideList=!hideList; render(true); }
+  else if(act==="goto") go(v);
+  else if(act==="next" && idx<PHASES.length-1) go(PHASES[idx+1].id);
+  else if(act==="prev" && idx>0) go(PHASES[idx-1].id);
+  else if(act==="method") saveSess({methodId:Number(v)});
+  else if(act==="min") saveSess({pairMin:Number(v), pairEndsAt: sess.pairEndsAt? Date.now()+Number(v)*60000 : 0});
+  else if(act==="timer") saveSess({pairEndsAt:Date.now()+sess.pairMin*60000});
+  else if(act==="feat") toggleFeature(v);
+  else if(act==="del"){ if(confirm("이 질문을 삭제할까요?")) deleteQuestion(v); }
+  else if(act==="savewrap"){ saveSess({wrap:(wrapDraft||"").trim()||DEFAULT_WRAP}); }
+  else if(act==="newround"){
+    if(confirm("새 수업을 시작할까요? 지금까지 공개한 질문과 정리 문장이 초기화돼요.")){
+      wrapDraft=null; mine=null; msg="";
+      saveSess({round:sess.round+1, phase:"method", pairEndsAt:0, featured:[], wrap:DEFAULT_WRAP});
+    }
+  }
+  else if(act==="change"){ draft.change = v; render(true); }
+  else if(act==="submit") submitQuestion();
+  else if(act==="login") doLogin();
+  else if(act==="logout") doLogout();
+});
+
+/* ───────── 교사 로그인 ───────── */
+async function refreshIdentity(){
+  const {data:{user}} = await sb.auth.getUser();
+  myId = user ? user.id : myId;
+  const {data} = await sb.rpc("is_teacher");
+  isTeacher = data === true;
+}
+async function doLogin(){
+  const email = (document.getElementById("lemail")||{}).value||"";
+  const pw = (document.getElementById("lpw")||{}).value||"";
+  if(!email.trim() || !pw){ loginMsg="이메일과 비밀번호를 입력해 주세요."; render(true); return; }
+  busy = true; loginMsg=""; render(true);
+  const {error} = await sb.auth.signInWithPassword({email:email.trim(), password:pw});
+  if(error){ busy=false; loginMsg="로그인하지 못했어요. 이메일과 비밀번호를 확인해 주세요."; render(true); return; }
+  await refreshIdentity();
+  if(!isTeacher){
+    await sb.auth.signOut(); await sb.auth.signInAnonymously(); await refreshIdentity();
+    busy=false; loginMsg="교사로 등록된 계정이 아니에요."; render(true); return;
+  }
+  busy=false; role="teacher"; msg="";
+  await loadRooms(); await loadLive();
+  if(roomId){ await loadSession(); await loadQuestions(); }
+  render(true);
+}
+async function doLogout(){
+  await sb.auth.signOut();
+  await sb.auth.signInAnonymously();
+  isTeacher=false; questions={}; role="student"; mine=null;
+  await refreshIdentity(); await loadRooms(); await loadLive();
+  if(roomId){ const ok = rooms.some(r=>r.id===roomId); if(ok){ await loadSession(); await loadMine(); } else leaveRoom(); }
+  await followLive();
+  render(true);
+}
+
+/* ───────── 타이머 ───────── */
+let lastRem = -1;
+setInterval(()=>{
+  if(sess.phase!=="pair") { lastRem=-1; return; }
+  const rem = remainingMs();
+  const el = document.getElementById("timer");
+  if(el && sess.pairEndsAt){ el.textContent = fmt(rem); el.classList.toggle("end", rem===0); }
+  if(sess.pairEndsAt && rem===0 && lastRem!==0){ lastRem=0; render(); }
+  else if(rem>0) lastRem = rem;
+}, 500);
+
+/* ───────── 연결 ───────── */
+let refetchTimer = null;
+function scheduleRefetch(){
+  clearTimeout(refetchTimer);
+  refetchTimer = setTimeout(async ()=>{
+    await loadRooms(); await loadLive(); await followLive();
+    if(roomId){ await loadSession(); await loadQuestions(); }
+    render();
+  }, 250);
+}
+async function connect(){
+  if(!configured || !window.supabase){ status="local"; render(true); return; }
+  try{
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let {data:{session}} = await sb.auth.getSession();
+    if(!session){
+      const {error} = await sb.auth.signInAnonymously();
+      if(error) throw new Error("익명 로그인에 실패했어요. Supabase에서 Anonymous sign-ins를 켰는지 확인해 주세요.");
+    }
+    await refreshIdentity();
+    const {error:roomErr} = await sb.from("rooms").select("id").limit(1);
+    if(roomErr) throw new Error("수업방 정보를 불러오지 못했어요. setup.sql을 실행했는지 확인해 주세요.");
+    await loadRooms();
+    status = "shared";
+    await loadLive();
+    if(isTeacher || wantTeacher) role="teacher"; else await followLive();   // 학생은 오늘 수업으로 자동 입장
+    sb.channel("sq-live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"rooms"}, scheduleRefetch)
+      .on("postgres_changes",{event:"*",schema:"public",table:"settings"}, scheduleRefetch)
+      .on("postgres_changes",{event:"*",schema:"public",table:"questions"}, ()=>{ if(isTeacher) scheduleRefetch(); })
+      .subscribe();
+    // 실시간 연결이 끊겨도 따라오도록 보조 새로고침
+    setInterval(async ()=>{
+      let changed = false;
+      const prevLive = liveRoomId, prevRoom = roomId;
+      await loadLive(); await followLive();
+      if(prevLive!==liveRoomId || prevRoom!==roomId) changed = true;
+      if(!roomId){ const n = JSON.stringify(rooms); await loadRooms(); changed = changed || n !== JSON.stringify(rooms); }
+      else {
+        changed = await loadSession();
+        if(isTeacher && (sess.phase==="write"||sess.phase==="share")) { await loadQuestions(); changed = true; }
+      }
+      if(changed) render();
+    }, 6000);
+  }catch(e){
+    status = "error"; errMsg = e.message || "연결하지 못했어요.";
+  }
+  render(true);
+}
+render(true);
+connect();
+</script>
+</body>
+</html>
