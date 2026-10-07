@@ -46,6 +46,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .seg button:disabled{opacity:.4;cursor:not-allowed}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.card.chosen{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .stack>*+*{margin-top:14px}
 h1,h2,h3{margin:0;line-height:1.35}
 h2{font-size:22px}
@@ -140,7 +141,8 @@ const METHODS = [
    example:"네 말을 끝까지 밀고 가면 아무도 안 입은 패딩에서도 맞을까? 그럼 냉동실에 넣어 둔 패딩도 따뜻해야 하지 않을까?"}
 ];
 const PHASES = [
-  {id:"method", label:"질문법 제시", min:"1분"},
+  {id:"method", label:"질문법 읽기", min:"2분"},
+  {id:"make",   label:"질문 만들기", min:"2분"},
   {id:"pair",   label:"짝 활동",     min:"4분"},
   {id:"write",  label:"질문 기록",   min:"2분"},
   {id:"share",  label:"함께 보기",   min:"2분"},
@@ -157,7 +159,7 @@ const UNITS = {
 const unitLabel = (i,name) => `${i+1}단원 ${name}`;
 const GUIDE = [
   "<b>가위바위보</b>로 질문자를 정해요.",
-  "질문자는 오늘의 질문법으로 <b>짝의 주장에 질문 1개</b>를 던져요.",
+  "질문자는 <b>내가 만든 질문</b>을 짝에게 던져요.",
   "답을 들으면 <b>“왜 그렇게 생각해?”</b>로 한 번 더 물어요.",
   "역할을 바꿔서 한 번 더 해요.",
   "끝나면 <b>우리 둘 다 아직 모르겠는 것</b>을 하나 떠올려요."
@@ -191,7 +193,7 @@ let newGrade = 1, newUnit = "";
 let hideList = false;
 let questions = {};             // id -> {roomId,round,name,first,left,change,at}
 let mine = null;
-let draft = {name:"", first:"", left:"", change:""};
+let draft = {name:"", method:null, first:"", left:"", change:""};
 let wrapDraft = null;
 let busy = false, msg = "", loginMsg = "", notice = "";
 let pendingRender = false;
@@ -216,14 +218,21 @@ const roomFromRow = r => ({id:r.id, grade:r.grade, unit:r.unit, active:r.active,
 const sessToRow = s => ({round:s.round, phase:s.phase, method_id:s.methodId, pair_min:s.pairMin,
   pair_ends_at:s.pairEndsAt, featured:s.featured, wrap:s.wrap});
 const qFromRow = r => ({roomId:r.room_id, round:r.round, name:r.student_name, first:r.first_q, left:r.left_q,
-  change:r.change_note, at:new Date(r.created_at).getTime()});
+  change:r.change_note, methodId:r.method_id, at:new Date(r.created_at).getTime()});
 const localKey = () => `${myId}:${roomId}:${sess.round}`;
 
 /* ───────── 수업방 ───────── */
 function applySess(next){
   const prev = sess.round;
   sess = {...defaultSess(), ...next};
-  if(sess.round !== prev){ mine=null; msg=""; wrapDraft=null; draft.first=""; draft.left=""; draft.change=""; }
+  if(sess.round !== prev){ mine=null; msg=""; wrapDraft=null; draft.first=""; draft.left=""; draft.change=""; draft.method=null; loadDraftLocal(); }
+}
+// 질문 만들기 단계에서 쓴 내용을 이 기기에 임시 저장 (새로고침해도 유지)
+const draftKey = () => `sq_draft_${roomId}_${sess.round}`;
+function saveDraftLocal(){ try{ localStorage.setItem(draftKey(), JSON.stringify({method:draft.method, first:draft.first})); }catch(e){} }
+function loadDraftLocal(){
+  try{ const v = JSON.parse(localStorage.getItem(draftKey())||"null");
+    if(v){ if(v.method) draft.method = v.method; if(v.first) draft.first = v.first; } }catch(e){}
 }
 async function loadRooms(){
   if(!sb) return;
@@ -241,7 +250,7 @@ function leaveRoom(text){
 async function enterRoom(id, mode){
   roomMode = mode || "manual";
   roomId = id; mine = null; if(sb) questions = {}; msg = ""; notice = ""; wrapDraft = null;
-  draft.first=""; draft.left=""; draft.change="";
+  draft.first=""; draft.left=""; draft.change=""; draft.method=null;
   sess = {...defaultSess(), round:0};
   await loadSession();
   if(roomId && isTeacher) await loadQuestions();
@@ -274,9 +283,9 @@ async function loadQuestions(){
 }
 async function loadMine(){
   if(!roomId) return;
-  if(!sb){ const q = questions[localKey()]; if(q){ mine=q; draft={name:q.name, first:q.first, left:q.left, change:q.change}; } return; }
+  if(!sb){ const q = questions[localKey()]; if(q){ mine=q; draft={name:q.name, method:q.methodId||draft.method, first:q.first, left:q.left, change:q.change}; } return; }
   const {data} = await sb.from("questions").select("*").eq("user_id", myId).eq("room_id", roomId).eq("round", sess.round).maybeSingle();
-  if(data){ mine = qFromRow(data); draft = {name:data.student_name||draft.name, first:data.first_q, left:data.left_q, change:data.change_note}; }
+  if(data){ mine = qFromRow(data); draft = {name:data.student_name||draft.name, method:data.method_id||draft.method, first:data.first_q, left:data.left_q, change:data.change_note}; }
 }
 async function createRoom(){
   const unit = newUnit.trim();
@@ -372,12 +381,12 @@ async function saveSess(patch){
   }
 }
 async function submitQuestion(){
-  const data = {roomId, round:sess.round, name:draft.name.trim(), first:draft.first.trim(), left:draft.left.trim(), change:draft.change, at:Date.now()};
+  const data = {roomId, round:sess.round, name:draft.name.trim(), first:draft.first.trim(), left:draft.left.trim(), change:draft.change, methodId:draft.method||sess.methodId, at:Date.now()};
   busy = true; msg = ""; render(true);
   try{
     if(sb){
       const {error} = await sb.from("questions").upsert(
-        {user_id:myId, room_id:roomId, round:sess.round, student_name:data.name, first_q:data.first, left_q:data.left, change_note:data.change, method_id:sess.methodId},
+        {user_id:myId, room_id:roomId, round:sess.round, student_name:data.name, first_q:data.first, left_q:data.left, change_note:data.change, method_id:data.methodId},
         {onConflict:"user_id,room_id,round"});
       if(error) throw error;
     } else { questions[localKey()] = data; }
@@ -402,7 +411,7 @@ function toggleFeature(id){
   const q = roundQuestions().find(x=>x.id===id); if(!q) return;
   let f = sess.featured.slice();
   if(f.some(x=>x.id===id)) f = f.filter(x=>x.id!==id);
-  else { if(f.length>=5){ msg="공개는 최대 5개까지예요."; render(true); return; } f.push({id, first:q.first, left:q.left, change:q.change}); }
+  else { if(f.length>=5){ msg="공개는 최대 5개까지예요."; render(true); return; } f.push({id, first:q.first, left:q.left, change:q.change, methodId:q.methodId}); }
   msg = ""; saveSess({featured:f});
 }
 
@@ -410,44 +419,83 @@ function toggleFeature(id){
 function frameHtml(m){
   return m.frame.map((t,i)=> i%2===1 ? '<span class="blank" aria-label="빈칸"></span>' : esc(t)).join("");
 }
-function methodCard(m, big){
-  return `<div class="card stack">
-    <div><span class="tag">오늘의 질문법</span></div>
-    <div><div class="mname">${esc(m.name)}</div><div class="goal">${esc(m.goal)}</div></div>
-    <div class="frame">${frameHtml(m)}</div>
-    ${big?`<div class="example"><div class="small muted">예시 — 짝이 이렇게 말했다면: “${esc(EXAMPLE_CLAIM)}”</div><div class="serif" style="font-size:20px;margin-top:6px">${esc(m.example)}</div><div class="small muted" style="margin-top:6px">처음엔 보고 따라 해도 좋아요. 그다음엔 오늘 탐구 내용으로 나만의 질문을 만들어 봐요.</div></div>`:""}
-  </div>`;
-}
+const methodName = id => { const m = METHODS.find(x=>x.id===id); return m ? m.name : ""; };
 function railHtml(interactive){
   const i = phaseIdx();
   return `<div class="rail ${interactive?"":"static"}" aria-label="수업 단계">` + PHASES.map((p,k)=>
     `<button ${interactive?`data-act="goto" data-v="${p.id}"`:"tabindex='-1'"} ${k===i?'aria-current="step"':""}>${k+1}. ${p.label} <span class="muted small" style="${k===i?"color:inherit;opacity:.8":""}">${p.min}</span></button>`
   ).join("") + `</div>`;
 }
+
+// 5가지 질문법을 위에서부터 모두 보여 줌 (학생은 하나를 고를 수 있음)
+function allMethodsHtml(selectable){
+  return `<div class="stack">
+    <div class="card"><span class="tag">예시 주장</span>
+      <div class="serif" style="font-size:22px;margin:6px 0 2px">“${esc(EXAMPLE_CLAIM)}”</div>
+      <div class="small muted">짝이 이렇게 말했다면, 질문법마다 이렇게 물어볼 수 있어요.</div></div>
+    ${METHODS.map((m,i)=>{
+      const chosen = selectable && draft.method===m.id;
+      return `<div class="card stack ${chosen?"chosen":""}">
+        <div class="row"><div class="mname" style="font-size:22px">${i+1}. ${esc(m.name)}</div>
+          ${m.id===sess.methodId?'<span class="tag">⭐ 오늘의 추천</span>':""}<span class="grow"></span>
+          ${selectable?`<button class="btn ${chosen?"primary":""}" data-act="pick" data-v="${m.id}" aria-pressed="${chosen}">${chosen?"✔ 내가 고른 질문법":"이 질문법으로 만들기"}</button>`:""}</div>
+        <div class="goal">${esc(m.goal)}</div>
+        <div class="frame">${frameHtml(m)}</div>
+        <div class="example"><div class="small muted">예시</div><div class="serif" style="font-size:19px;margin-top:2px">${esc(m.example)}</div></div>
+      </div>`;}).join("")}
+  </div>`;
+}
+
+// 질문 만들기 (학생): 고른 질문법의 문장틀을 보고 내 말로 질문 쓰기
+function makeHtml(){
+  const m = METHODS.find(x=>x.id===draft.method);
+  const chips = `<div class="chips">${METHODS.map(x=>`<button class="chip" data-act="pick" data-v="${x.id}" aria-pressed="${draft.method===x.id}">${esc(x.name)}</button>`).join("")}</div>`;
+  if(!m) return `<div class="card stack">
+    <h2>어떤 질문법으로 질문할까요?</h2>
+    <p class="hint">앞 화면에서 읽은 5가지 중에서 마음에 드는 질문법을 하나 골라요.</p>${chips}</div>`;
+  const ready = draft.first.trim().length>0;
+  return `<div class="stack">
+    <div class="card stack">
+      <div class="row"><span class="tag">내가 고른 질문법</span><b style="font-size:20px">${esc(m.name)}</b></div>
+      <div class="goal">${esc(m.goal)}</div>
+      <div class="frame">${frameHtml(m)}</div>
+      <div class="example"><div class="small muted">예시 — “${esc(EXAMPLE_CLAIM)}”</div><div class="serif" style="font-size:19px;margin-top:2px">${esc(m.example)}</div></div>
+    </div>
+    <div class="card stack">
+      <div><label class="f" for="first">짝에게 던질 질문을 내 말로 써 봐요</label>
+        <p class="hint">문장틀은 참고만 해요. 오늘 탐구한 내용에 맞게 바꿔 써도 좋아요.</p>
+        <textarea id="first" data-f="first" maxlength="120">${esc(draft.first)}</textarea></div>
+      ${ready?`<div class="done">✔ 질문이 준비됐어요. 짝 활동이 시작되면 짝에게 물어봐요.</div>`:""}
+      <div><div class="small muted" style="margin-bottom:4px">다른 질문법으로 바꾸고 싶다면</div>${chips}</div>
+    </div>
+  </div>`;
+}
+
 function pairHtml(teacher){
   const rem = remainingMs();
-  return `<div class="card stack">
+  const mineCard = (!teacher && draft.first.trim()) ? `<div class="card stack" style="border-left:6px solid var(--mark)">
+      <div class="row"><span class="tag">내가 만든 질문</span>${draft.method?`<span class="tag plain">${esc(methodName(draft.method))}</span>`:""}</div>
+      <div class="serif" style="font-size:clamp(20px,3vw,26px);line-height:1.6">${esc(draft.first)}</div></div>` : "";
+  return `<div class="stack">${mineCard}<div class="card stack">
     <div class="timer ${rem===0?"end":""}" id="timer" role="timer" aria-live="off">${sess.pairEndsAt? fmt(rem) : fmt(sess.pairMin*60000)}</div>
     <div class="nophone">📵 화면은 내려놓고, 서로 눈을 보며 말해요!</div>
     <div class="guide card" style="background:var(--soft);border:0">
       <h3>짝 질문 활동 방법</h3>
       <ol>${GUIDE.map(g=>`<li>${g}</li>`).join("")}</ol>
     </div>
-    <div class="small muted">오늘의 질문법: <b>${esc(method().name)}</b> — ${esc(method().goal)}</div>
-  </div>`;
+  </div></div>`;
 }
 function formHtml(){
-  const m = method();
   const d = draft;
   const ready = d.name.trim() && d.first.trim() && d.left.trim() && d.change;
   const blocked = canWrite === false;
   return `<div class="card stack">
-    <div class="row"><span class="tag">${esc(m.name)}</span><span class="muted small">짝 활동을 끝낸 뒤 적어요</span></div>
+    <div class="row">${d.method?`<span class="tag">${esc(methodName(d.method))}</span>`:""}<span class="muted small">짝 활동을 끝낸 뒤 적어요</span></div>
     ${blocked?`<div class="notice err">이 화면에서는 질문을 올릴 수 없어요. 선생님께 로그인 상태를 확인해 달라고 말씀드리세요.</div>`:""}
     <div><label class="f" for="name">이름</label>
       <input type="text" id="name" data-f="name" maxlength="12" value="${esc(d.name)}" placeholder="예: 김민준"></div>
     <div><label class="f" for="first">① 내가 처음에 던진 질문</label>
-      <p class="hint">짝에게 가장 먼저 물어본 질문을 한 줄로 적어요.</p>
+      <p class="hint">‘질문 만들기’에서 쓴 질문이에요. 짝에게 실제로 던진 질문으로 고쳐도 좋아요.</p>
       <textarea id="first" data-f="first" maxlength="120">${esc(d.first)}</textarea></div>
     <div><label class="f" for="left">② 대화 후 남은 질문</label>
       <p class="hint">짝과 이야기하다가 우리 둘 다 <b>아직 모르겠는 것</b>을 적어요.</p>
@@ -468,7 +516,7 @@ function pubCards(){
     <div class="qcard pub">
       <div class="first">처음엔: ${esc(q.first)}</div>
       <div class="left">${esc(q.left)}</div>
-      ${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}
+      <div class="row">${q.methodId?`<span class="tag">${esc(methodName(q.methodId))}</span>`:""}${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}</div>
     </div>`).join("") + `</div>`;
 }
 function wrapHtml(){
@@ -478,7 +526,8 @@ function wrapHtml(){
 /* ───────── 학생 화면 ───────── */
 function studentView(){
   const p = sess.phase;
-  if(p==="method") return `<div class="stack">${methodCard(method(), true)}<div class="notice">곧 짝 활동이 시작돼요. 문장틀을 눈으로 읽어 두세요.</div></div>`;
+  if(p==="method") return `<div class="stack"><div class="notice">위에서부터 하나씩 읽어 보고, 마음에 드는 질문법을 <b>하나</b> 골라요.</div>${allMethodsHtml(true)}</div>`;
+  if(p==="make") return makeHtml();
   if(p==="pair"){
     if(sess.pairEndsAt && remainingMs()===0) return `<div class="stack"><div class="notice">시간이 끝났어요! 이제 질문을 기록해요.</div>${formHtml()}</div>`;
     return pairHtml(false);
@@ -509,14 +558,16 @@ function teacherView(){
       <button class="btn danger" data-act="newround">새 수업 시작</button>
     </div>
     <div class="row">
-      <span class="small muted">오늘의 질문법</span>
+      <span class="small muted">⭐ 추천 질문법 표시</span>
       <div class="chips">${METHODS.map(m=>`<button class="chip" data-act="method" data-v="${m.id}" aria-pressed="${sess.methodId===m.id}">${esc(m.name)}</button>`).join("")}</div>
     </div>
     ${msg && msg!=="ok" ? `<div class="notice ${/못했|최대/.test(msg)?"err":""}">${esc(msg)}</div>`:""}
   </div>`;
   let body = "";
   if(p==="method"){
-    body = methodCard(method(), true);
+    body = `<div class="stack"><div class="notice">학생들은 5가지 질문법을 위에서부터 읽고 하나를 고르고 있어요. (학생 화면에서는 ‘이 질문법으로 만들기’ 버튼이 보여요)</div>${allMethodsHtml(false)}</div>`;
+  } else if(p==="make"){
+    body = `<div class="stack"><div class="card"><div class="wrapline" style="font-size:clamp(22px,4vw,34px);padding:12px 6px">고른 질문법의 문장틀로,<br>짝에게 던질 질문을 내 말로 써 봐요</div></div>${allMethodsHtml(false)}</div>`;
   } else if(p==="pair"){
     body = pairHtml(true) + `<div class="row">
       <button class="btn primary" data-act="timer">타이머 ${sess.pairEndsAt?"다시 ":""}시작</button>
@@ -524,8 +575,7 @@ function teacherView(){
       <div class="chips">${[3,4,5].map(n=>`<button class="chip" data-act="min" data-v="${n}" aria-pressed="${sess.pairMin===n}">${n}</button>`).join("")}</div>
     </div>`;
   } else if(p==="write"){
-    body = `<div class="card stack"><div class="small muted" style="text-align:center">질문 제출 현황</div><div class="count" id="cnt">${qs.length}</div><div class="small muted" style="text-align:center">질문 내용은 공개 단계 전까지 학생 화면에 보이지 않아요.</div></div>
-      ${methodCard(method(), false)}`;
+    body = `<div class="card stack"><div class="small muted" style="text-align:center">질문 제출 현황</div><div class="count" id="cnt">${qs.length}</div><div class="small muted" style="text-align:center">질문 내용은 공개 단계 전까지 학생 화면에 보이지 않아요.</div></div>`;
   } else if(p==="share"){
     const pubIds = new Set(sess.featured.map(f=>f.id));
     body = `<div class="stack">
@@ -533,7 +583,7 @@ function teacherView(){
         <div class="row"><h3>제출된 질문 (교사 전용)</h3><span class="grow"></span><span class="small muted">2~3개를 골라 공개해요 · 최대 5개</span><button class="btn" data-act="togglelist">${hideList?"목록 펼치기":"목록 접기"}</button></div>
         ${hideList? `<div class="empty">교사 전용 목록이 접혀 있어요 (큰 화면용). 공개한 질문만 아래에 보여요.</div>` : qs.length? `<div class="qgrid">`+qs.map(q=>`
           <div class="qcard">
-            <div class="small muted">${esc(q.name||"이름 없음")}</div>
+            <div class="small muted">${esc(q.name||"이름 없음")}${q.methodId?` · ${esc(methodName(q.methodId))}`:""}</div>
             <div class="first">처음엔: ${esc(q.first)}</div>
             <div class="left" style="font-size:19px">${esc(q.left)}</div>
             <div class="row">${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}<span class="grow"></span>
@@ -656,6 +706,7 @@ document.addEventListener("input", e=>{
   if(f==="wrap") { wrapDraft = e.target.value; return; }
   if(f==="nunit") { newUnit = e.target.value; return; }
   draft[f] = e.target.value;
+  if(f==="first") saveDraftLocal();
   const btn = document.querySelector('[data-act="submit"]');
   if(btn) btn.disabled = !(draft.name.trim()&&draft.first.trim()&&draft.left.trim()&&draft.change) || busy || canWrite===false;
 });
@@ -714,6 +765,7 @@ document.addEventListener("click", e=>{
     }
   }
   else if(act==="change"){ draft.change = v; render(true); }
+  else if(act==="pick"){ draft.method = Number(v); saveDraftLocal(); render(true); }
   else if(act==="submit") submitQuestion();
   else if(act==="login") doLogin();
   else if(act==="logout") doLogout();
