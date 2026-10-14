@@ -195,6 +195,7 @@ let mine = null;
 let draft = {name:"", method:null, first:"", left:"", change:""};
 let wrapDraft = null;
 let labelDraft = "";
+let ownQs = [];                 // 내가 쓴 질문들 [{round,first_q,left_q}] (학생)
 let keptList = [];              // 활동별로 남긴 질문 [{round,label,question}]
 let busy = false, msg = "", loginMsg = "", notice = "";
 let pendingRender = false;
@@ -250,7 +251,7 @@ function leaveRoom(text){
 }
 async function enterRoom(id, mode){
   roomMode = mode || "manual";
-  keptList = []; labelDraft = "";
+  keptList = []; ownQs = []; labelDraft = "";
   roomId = id; mine = null; if(sb) questions = {}; msg = ""; notice = ""; wrapDraft = null;
   draft.first=""; draft.left=""; draft.change=""; draft.method=null;
   sess = {...defaultSess(), round:0};
@@ -281,6 +282,17 @@ async function loadKept(){
   if(!sb) return;
   const {data, error} = await sb.from("kept").select("round,idx,label,question").eq("room_id", roomId).order("round").order("idx");
   if(!error && data) keptList = data;
+  if(!isTeacher){
+    const r = await sb.from("questions").select("round,first_q,left_q").eq("user_id", myId).eq("room_id", roomId);
+    if(!r.error && r.data) ownQs = r.data;
+  }
+}
+// 이번 활동에서 남길 후보: 공개한 질문이 있으면 그것, 없으면 이번 활동의 모든 학생 질문
+const keepCands = () => sess.featured.length ? sess.featured : roundQuestions().map(q=>({id:q.id, first:q.first, left:q.left}));
+// 내가 쓴 질문인지 (지난 시간 질문을 주인에게만 보여 주기 위해)
+function ownTexts(round){
+  if(sb) return ownQs.filter(r=>r.round===round).flatMap(r=>[r.first_q, r.left_q]);
+  return Object.entries(questions).filter(([k,q])=>k.startsWith(`${myId}:${roomId}:`) && q.round===round).flatMap(([,q])=>[q.first,q.left]);
 }
 const keptOf = round => keptList.filter(k=>k.round===round).sort((a,b)=>(a.idx||1)-(b.idx||1));
 async function addKept(question){
@@ -311,6 +323,15 @@ async function saveLabel(){
   const label = labelDraft.trim().slice(0,40);
   keptList.forEach(k=>{ if(k.round===sess.round) k.label=label; });
   if(sb && keptOf(sess.round).length) await sb.from("kept").update({label}).eq("room_id",roomId).eq("round",sess.round);
+}
+function goRound(delta){
+  const target = sess.round + delta;
+  if(target<1) return;
+  const warn = sess.featured.length ? " 지금 공개한 질문 목록은 초기화돼요." : "";
+  const text = delta>0 ? `다음 질문 활동으로 넘어갈까요?${warn} 남긴 질문은 그대로 보관돼요.` : `이전 질문 활동(${target})으로 돌아갈까요?${warn}`;
+  if(!confirm(text)) return;
+  wrapDraft=null; labelDraft=""; mine=null; msg="";
+  saveSess({round:target, phase: keptOf(target).length ? "wrap" : "make", pairEndsAt:0, featured:[]});
 }
 async function loadQuestions(){
   if(!sb || !isTeacher || !roomId) return;
@@ -590,8 +611,12 @@ function wrapHtml(){
 function keptBanner(){
   const prev = [...new Set(keptList.map(k=>k.round))].filter(r=>r<sess.round).sort((a,b)=>b-a)[0];
   if(prev==null) return "";
-  return `<div class="card" style="border-left:6px solid var(--mark)"><span class="tag">지난 시간에 남긴 질문</span>
-    ${keptOf(prev).map(k=>`<div class="serif" style="font-size:clamp(20px,3vw,26px);margin-top:6px">${esc(k.question)}</div>`).join("")}</div>`;
+  const mineTexts = ownTexts(prev).filter(t=>t && t!=="-");
+  const items = keptOf(prev).filter(k=>mineTexts.includes(k.question));
+  if(!items.length) return "";
+  return `<div class="card" style="border-left:6px solid var(--mark)"><span class="tag">지난 시간에 남긴 내 질문</span>
+    ${items.map(k=>`<div class="serif" style="font-size:clamp(20px,3vw,26px);margin-top:6px">${esc(k.question)}</div>`).join("")}
+    <div class="small muted" style="margin-top:6px">이 질문에서 이어서 생각해 봐도 좋아요.</div></div>`;
 }
 
 /* ───────── 학생 화면 ───────── */
@@ -626,7 +651,8 @@ function teacherView(){
       <button class="btn primary" data-act="next" ${idx===PHASES.length-1?"disabled":""}>다음 단계</button>
       <span class="grow"></span>
       <span class="small muted">제출 ${qs.length}명</span>
-      <button class="btn danger" data-act="newround">다음 질문 활동 시작</button>
+      <button class="btn" data-act="gotoround" data-v="-1" ${sess.round<=1?"disabled":""}>‹ 이전 질문 활동</button>
+      <button class="btn danger" data-act="gotoround" data-v="1">다음 질문 활동 ›</button>
     </div>
     <div class="row">
       <span class="small muted">⭐ 추천 질문법 표시</span>
@@ -688,7 +714,7 @@ function teacherView(){
     </div>`;
   } else {
     if(wrapDraft===null) wrapDraft = "";
-    const cand = sess.featured.filter(f=>(f.left&&f.left.trim())||(f.first&&f.first.trim()));
+    const cand = keepCands().filter(f=>(f.left&&f.left.trim())||(f.first&&f.first.trim()));
     const keptQs = new Set(keptOf(sess.round).map(k=>k.question));
     const pickRow = (id,kind,label,text) => { const q=(text||"").slice(0,120); if(!q.trim()) return ""; const on=keptQs.has(q);
       return `<div class="row" style="align-items:flex-start;margin-top:6px"><div class="grow"><div class="small muted">${label}</div><div class="serif" style="font-size:19px">${esc(text)}</div></div>
@@ -702,7 +728,7 @@ function teacherView(){
         <div class="row"><button class="btn primary" data-act="savewrap">이 질문 기록하기</button>
           <button class="btn" data-act="clearwrap">남긴 질문 모두 비우기</button></div>
         <h3 style="margin-top:8px">또는 함께 본 질문에서 고르기</h3>
-        ${cand.length? `<div class="stack">`+cand.map(f=>`<div class="qcard">${pickRow(f.id,"first","처음 질문",f.first)}${pickRow(f.id,"left","남은 질문",f.left)}</div>`).join("")+`</div>` : `<div class="empty">‘함께 보기’에서 공개한 질문이 없어요. 위에서 직접 써서 기록할 수 있어요.</div>`}
+        ${cand.length? `<div class="stack">`+cand.map(f=>`<div class="qcard">${pickRow(f.id,"first","처음 질문",f.first)}${pickRow(f.id,"left","남은 질문",f.left)}</div>`).join("")+`</div>` : `<div class="empty">이번 활동에서 올라온 질문이 없어요. 위에서 직접 써서 기록할 수 있어요.</div>`}
         <label class="f" for="labelin">이 질문 활동의 소단원 이름 (선택)</label>
         <input type="text" id="labelin" data-f="label" maxlength="40" value="${esc(labelDraft)}" placeholder="예: 소화와 에너지">
         ${msg && msg!=="ok" ? `<div class="notice err">${esc(msg)}</div>`:""}
@@ -866,9 +892,10 @@ document.addEventListener("click", e=>{
   else if(act==="feat") toggleFeature(v);
   else if(act==="del"){ if(confirm("이 질문을 삭제할까요?")) deleteQuestion(v); }
   else if(act==="savewrap"){ const t=(wrapDraft||"").trim(); wrapDraft=""; addKept(t); }
-  else if(act==="keep"){ const cut=String(v).lastIndexOf("|"); const id=String(v).slice(0,cut), kind=String(v).slice(cut+1); const f=sess.featured.find(x=>x.id===id); if(f){ const q=(f[kind==="first"?"first":"left"]||"").slice(0,120); if(q.trim()){ if(keptOf(sess.round).some(k=>k.question===q)) removeKept(q); else addKept(q); } } }
+  else if(act==="keep"){ const cut=String(v).lastIndexOf("|"); const id=String(v).slice(0,cut), kind=String(v).slice(cut+1); const f=keepCands().find(x=>x.id===id); if(f){ const q=(f[kind==="first"?"first":"left"]||"").slice(0,120); if(q.trim()){ if(keptOf(sess.round).some(k=>k.question===q)) removeKept(q); else addKept(q); } } }
   else if(act==="clearwrap"){ wrapDraft=""; clearKept(); }
   else if(act==="unit"){ msg=""; saveSess({phase:"unit"}); loadKept().then(()=>render(true)); }
+  else if(act==="gotoround") goRound(Number(v));
   else if(act==="newround"){
     if(confirm("다음 질문 활동을 시작할까요? 공개한 질문은 초기화되고, 남긴 질문은 다음 활동 첫 화면에 ‘지난 시간에 남긴 질문’으로 보여요.")){
       wrapDraft=null; labelDraft=""; mine=null; msg="";
