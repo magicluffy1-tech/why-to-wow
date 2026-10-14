@@ -546,9 +546,9 @@ function formHtml(){
       <p class="hint">‘질문 만들기’에서 쓴 질문이에요. 짝에게 실제로 던진 질문으로 고쳐도 좋아요.</p>
       <textarea id="first" data-f="first" maxlength="120">${esc(d.first)}</textarea></div>
     <div><label class="f" for="left">② 대화 후 남은 질문</label>
-      <p class="hint">짝과 이야기하다가 우리 둘 다 <b>아직 모르겠는 것</b>을 적어요.</p>
-      <textarea id="left" data-f="left" maxlength="120">${esc(d.left)}</textarea></div>
-    <div><label class="f">③ 짝 대화에서 바뀐 점</label>
+      <p class="hint">짝과 이야기하다가 우리 둘 다 <b>아직 모르겠는 것</b>을 <b>질문 문장</b>으로 적어요. (생각이 바뀌었는지는 아래 ③ 버튼으로 골라요.)</p>
+      <textarea id="left" data-f="left" maxlength="120" placeholder="예: 그럼 공기층이 없으면 열은 어떻게 이동할까?">${esc(d.left)}</textarea></div>
+    <div><label class="f">③ 짝 대화에서 생각이 바뀌었나요? (버튼으로 고르기)</label>
       <div class="chips">${CHANGES.map(c=>`<button class="chip" data-act="change" data-v="${esc(c)}" aria-pressed="${d.change===c}">${esc(c)}</button>`).join("")}</div></div>
     <div class="row">
       <button class="btn primary big" data-act="submit" ${(!ready||busy||blocked)?"disabled":""}>${mine&&mine.round===sess.round?"질문 고쳐서 다시 올리기":"질문 올리기"}</button>
@@ -688,21 +688,23 @@ function teacherView(){
     </div>`;
   } else {
     if(wrapDraft===null) wrapDraft = "";
-    const cand = sess.featured.filter(f=>f.left && f.left.trim());
+    const cand = sess.featured.filter(f=>(f.left&&f.left.trim())||(f.first&&f.first.trim()));
     const keptQs = new Set(keptOf(sess.round).map(k=>k.question));
+    const pickRow = (id,kind,label,text) => { const q=(text||"").slice(0,120); if(!q.trim()) return ""; const on=keptQs.has(q);
+      return `<div class="row" style="align-items:flex-start;margin-top:6px"><div class="grow"><div class="small muted">${label}</div><div class="serif" style="font-size:19px">${esc(text)}</div></div>
+        <button class="btn ${on?"primary":""}" data-act="keep" data-v="${esc(id)}|${kind}">${on?"남기는 중 ★":"이 질문 남기기"}</button></div>`; };
     body = `<div class="stack">${wrapHtml()}
       <div class="card stack">
-        <div class="row"><h3>함께 본 질문 중에서 남길 질문 고르기</h3><span class="grow"></span><span class="small muted">1~2개 · ${keptOf(sess.round).length}/2 선택</span></div>
-        ${cand.length? `<div class="qgrid">`+cand.map(f=>{ const q=f.left.slice(0,120), on=keptQs.has(q); return `<div class="qcard ${on?"pub":""}">
-          <div class="first">처음엔: ${esc(f.first)}</div>
-          <div class="left" style="font-size:19px">${esc(f.left)}</div>
-          <div class="row"><span class="grow"></span><button class="btn ${on?"primary":""}" data-act="keep" data-v="${esc(f.id)}">${on?"남기는 중 ★":"이 질문 남기기"}</button></div></div>`;}).join("")+`</div>` : `<div class="empty">‘함께 보기’에서 공개한 질문이 없어요. 아래에서 직접 써서 남길 수 있어요.</div>`}
+        <div class="row"><h3>남길 질문 기록하기</h3><span class="grow"></span><span class="small muted">1~2개 · ${keptOf(sess.round).length}/2 선택</span></div>
+        <label class="f" for="wrapin">직접 써서 기록하기</label>
+        <p class="hint">함께 본 질문을 바탕으로 다듬어 쓰거나, 새로 떠오른 질문을 써도 좋아요.</p>
+        <textarea id="wrapin" data-f="wrap" maxlength="120" placeholder="예: 패딩이 열을 막아 주는 거라면, 공기층이 없으면 어떻게 될까?">${esc(wrapDraft)}</textarea>
+        <div class="row"><button class="btn primary" data-act="savewrap">이 질문 기록하기</button>
+          <button class="btn" data-act="clearwrap">남긴 질문 모두 비우기</button></div>
+        <h3 style="margin-top:8px">또는 함께 본 질문에서 고르기</h3>
+        ${cand.length? `<div class="stack">`+cand.map(f=>`<div class="qcard">${pickRow(f.id,"first","처음 질문",f.first)}${pickRow(f.id,"left","남은 질문",f.left)}</div>`).join("")+`</div>` : `<div class="empty">‘함께 보기’에서 공개한 질문이 없어요. 위에서 직접 써서 기록할 수 있어요.</div>`}
         <label class="f" for="labelin">이 질문 활동의 소단원 이름 (선택)</label>
         <input type="text" id="labelin" data-f="label" maxlength="40" value="${esc(labelDraft)}" placeholder="예: 소화와 에너지">
-        <label class="f" for="wrapin">직접 써서 남기기 (선택)</label>
-        <textarea id="wrapin" data-f="wrap" maxlength="120">${esc(wrapDraft)}</textarea>
-        <div class="row"><button class="btn" data-act="savewrap">이 질문도 남기기</button>
-          <button class="btn" data-act="clearwrap">남긴 질문 모두 비우기</button></div>
         ${msg && msg!=="ok" ? `<div class="notice err">${esc(msg)}</div>`:""}
       </div></div>`;
   }
@@ -864,7 +866,7 @@ document.addEventListener("click", e=>{
   else if(act==="feat") toggleFeature(v);
   else if(act==="del"){ if(confirm("이 질문을 삭제할까요?")) deleteQuestion(v); }
   else if(act==="savewrap"){ const t=(wrapDraft||"").trim(); wrapDraft=""; addKept(t); }
-  else if(act==="keep"){ const f=sess.featured.find(x=>x.id===v); if(f){ const q=f.left.slice(0,120); if(keptOf(sess.round).some(k=>k.question===q)) removeKept(q); else addKept(q); } }
+  else if(act==="keep"){ const cut=String(v).lastIndexOf("|"); const id=String(v).slice(0,cut), kind=String(v).slice(cut+1); const f=sess.featured.find(x=>x.id===id); if(f){ const q=(f[kind==="first"?"first":"left"]||"").slice(0,120); if(q.trim()){ if(keptOf(sess.round).some(k=>k.question===q)) removeKept(q); else addKept(q); } } }
   else if(act==="clearwrap"){ wrapDraft=""; clearKept(); }
   else if(act==="unit"){ msg=""; saveSess({phase:"unit"}); loadKept().then(()=>render(true)); }
   else if(act==="newround"){
