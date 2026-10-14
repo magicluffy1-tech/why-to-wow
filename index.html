@@ -145,7 +145,7 @@ const PHASES = [
   {id:"pair",   label:"짝 활동",     min:"4분"},
   {id:"write",  label:"질문 기록",   min:"2분"},
   {id:"share",  label:"함께 보기",   min:"2분"},
-  {id:"wrap",   label:"한 줄 정리",  min:"1분"}
+  {id:"wrap",   label:"질문 남기기", min:"1분"}
 ];
 const CHANGES = ["내 생각이 바뀜","짝 생각이 바뀜","둘 다 그대로"];
 const DEFAULT_WRAP = "좋은 질문은 바로 답이 나오지 않고, 우리를 더 생각하게 만든다.";
@@ -194,6 +194,8 @@ let questions = {};             // id -> {roomId,round,name,first,left,change,at
 let mine = null;
 let draft = {name:"", method:null, first:"", left:"", change:""};
 let wrapDraft = null;
+let labelDraft = "";
+let keptList = [];              // 활동별로 남긴 질문 [{round,label,question}]
 let busy = false, msg = "", loginMsg = "", notice = "";
 let pendingRender = false;
 const $app = document.getElementById("app");
@@ -248,10 +250,11 @@ function leaveRoom(text){
 }
 async function enterRoom(id, mode){
   roomMode = mode || "manual";
+  keptList = []; labelDraft = "";
   roomId = id; mine = null; if(sb) questions = {}; msg = ""; notice = ""; wrapDraft = null;
   draft.first=""; draft.left=""; draft.change=""; draft.method=null;
   sess = {...defaultSess(), round:0};
-  await loadSession();
+  await loadSession(); await loadKept();
   if(roomId && isTeacher) await loadQuestions();
   if(roomId && status==="local") loadMine();
   render(true);
@@ -272,6 +275,27 @@ async function loadSession(){
   applySess(room);
   if(sess.round !== prevRound && !isTeacher) await loadMine();
   return JSON.stringify(sess)!==before;
+}
+async function loadKept(){
+  if(!roomId) return;
+  if(!sb) return;
+  const {data, error} = await sb.from("kept").select("round,label,question").eq("room_id", roomId).order("round");
+  if(!error && data) keptList = data;
+}
+async function saveKept(question){
+  const q = (question||"").trim().slice(0,120);
+  const label = labelDraft.trim().slice(0,40);
+  if(!q){
+    keptList = keptList.filter(k=>k.round!==sess.round);
+    if(sb) await sb.from("kept").delete().eq("room_id",roomId).eq("round",sess.round);
+    return;
+  }
+  const row = {round:sess.round, label, question:q};
+  keptList = keptList.filter(k=>k.round!==sess.round).concat(row).sort((a,b)=>a.round-b.round);
+  if(sb){
+    const {error} = await sb.from("kept").upsert({room_id:roomId, ...row},{onConflict:"room_id,round"});
+    if(error){ msg="활동 기록을 저장하지 못했어요. setup.sql을 다시 실행했는지 확인해 주세요."; render(true); }
+  }
 }
 async function loadQuestions(){
   if(!sb || !isTeacher || !roomId) return;
@@ -420,6 +444,7 @@ function frameHtml(m){
 }
 const methodName = id => { const m = METHODS.find(x=>x.id===id); return m ? m.name : ""; };
 function railHtml(interactive){
+  if(sess.phase==="unit") return "";
   const i = phaseIdx();
   return `<div class="rail ${interactive?"":"static"}" aria-label="수업 단계">` + PHASES.map((p,k)=>
     `<button ${interactive?`data-act="goto" data-v="${p.id}"`:"tabindex='-1'"} ${k===i?'aria-current="step"':""}>${k+1}. ${p.label} <span class="muted small" style="${k===i?"color:inherit;opacity:.8":""}">${p.min}</span></button>`
@@ -460,6 +485,7 @@ function makeHtml(){
       <div class="example"><div class="small muted">예시 — 짝이 “${esc(EXAMPLE_CLAIM)}”라고 말했다면</div><div class="serif" style="font-size:19px;margin-top:2px">${esc(m.example)}</div></div>
     </div>` : `<div class="notice">아래에서 궁금한 질문법을 하나 눌러 보세요. 누르면 예시가 나와요.</div>`;
   return `<div class="stack">
+    ${keptBanner()}
     ${pickList}
     ${detail}
     ${m?`<div class="card stack">
@@ -506,7 +532,7 @@ function formHtml(){
       <textarea id="first" data-f="first" maxlength="120">${esc(d.first)}</textarea></div>
     <div><label class="f" for="left">② 대화 후 남은 질문</label>
       <p class="hint">짝과 이야기하다가 우리 둘 다 <b>아직 모르겠는 것</b>을 적어요.</p>
-      <textarea id="left" data-f="left" maxlength="140">${esc(d.left)}</textarea></div>
+      <textarea id="left" data-f="left" maxlength="120">${esc(d.left)}</textarea></div>
     <div><label class="f">③ 짝 대화에서 바뀐 점</label>
       <div class="chips">${CHANGES.map(c=>`<button class="chip" data-act="change" data-v="${esc(c)}" aria-pressed="${d.change===c}">${esc(c)}</button>`).join("")}</div></div>
     <div class="row">
@@ -526,8 +552,27 @@ function pubCards(){
       <div class="row">${q.methodId?`<span class="tag">${esc(methodName(q.methodId))}</span>`:""}${q.change?`<span class="tag plain">${esc(q.change)}</span>`:""}</div>
     </div>`).join("") + `</div>`;
 }
+function unitHtml(){
+  const list = keptList.slice().sort((a,b)=>a.round-b.round);
+  if(!list.length) return `<div class="card"><div class="empty" style="border:0">아직 남긴 질문이 없어요. 질문 활동의 마지막 단계에서 ‘이 질문 남기기’를 눌러 주세요.</div></div>`;
+  return `<div class="stack"><div class="card"><span class="tag">단원 마무리</span>
+    <h2 style="margin-top:6px">우리 질문은 이렇게 이어졌어요</h2>
+    <div class="small muted">질문 활동마다 남긴 질문을 순서대로 모았어요.</div></div>
+    ${list.map((k,i)=>`${i?'<div class="muted" style="text-align:center;font-size:22px" aria-hidden="true">↓</div>':""}
+      <div class="qcard pub"><div class="row"><span class="tag">질문 활동 ${i+1}</span>${k.label?`<b>${esc(k.label)}</b>`:""}</div>
+        <div class="left">${esc(k.question)}</div></div>`).join("")}</div>`;
+}
+const hasKept = () => sess.wrap && sess.wrap!==DEFAULT_WRAP;
 function wrapHtml(){
-  return `<div class="card"><div class="wrapline">${esc(sess.wrap)}</div></div>`;
+  if(!hasKept()) return `<div class="card"><div class="empty" style="border:0">선생님이 오늘 남길 질문을 고르고 있어요.</div></div>`;
+  return `<div class="card stack"><span class="tag">오늘 우리가 남긴 질문</span>
+    <div class="wrapline" style="padding:14px 6px">${esc(sess.wrap)}</div>
+    <div class="small muted" style="text-align:center">답이 없어도 괜찮아요. 다음 시간에 이 질문에서 다시 시작해요.</div></div>`;
+}
+// 지난 시간에 남긴 질문 (다음 수업 첫 화면에 표시)
+function keptBanner(){
+  return hasKept() ? `<div class="card" style="border-left:6px solid var(--mark)"><span class="tag">지난 시간에 남긴 질문</span>
+    <div class="serif" style="font-size:clamp(20px,3vw,26px);margin-top:6px">${esc(sess.wrap)}</div></div>` : "";
 }
 
 /* ───────── 학생 화면 ───────── */
@@ -539,6 +584,7 @@ function studentView(){
     return pairHtml(false);
   }
   if(p==="write") return formHtml();
+  if(p==="unit") return unitHtml();
   if(p==="share") return `<div class="stack"><h2>우리 반이 함께 생각할 질문</h2>${pubCards()}</div>`;
   return wrapHtml();
 }
@@ -550,27 +596,30 @@ function teacherView(){
   const isLiveNow = liveRoomId===roomId;
   const ctrl = `<div class="card stack sticky" style="padding:12px 14px">
     <div class="row"><span class="tag">${esc(String(curRoom()?curRoom().grade:""))}학년</span><b>${esc(curRoom()?curRoom().unit:"")}</b>
-      ${isLiveNow?`<span class="tag">● 오늘 수업</span>`:""}<span class="grow"></span>
+      ${isLiveNow?`<span class="tag">● 오늘 수업</span>`:""}${p==="unit"?`<span class="tag plain">단원 마무리</span>`:`<span class="tag plain">질문 활동 ${sess.round}</span>`}<span class="grow"></span>
       ${isLiveNow?`<button class="btn" data-act="unlive">열기 해제</button>`:`<button class="btn primary" data-act="golive" data-v="${esc(roomId)}">오늘 수업으로 열기</button>`}
       <button class="btn" data-act="copylink">학생 주소 복사</button>
       <button class="btn" data-act="leave">수업방 바꾸기</button></div>
     ${isLiveNow?"":`<div class="notice">아직 학생들이 이 수업방으로 들어오지 않아요. ‘오늘 수업으로 열기’를 누르면 학생 화면이 자동으로 이 방으로 바뀌어요.</div>`}
     ${railHtml(true)}
-    <div class="row">
+    ${p==="unit"?`<div class="row"><button class="btn" data-act="goto" data-v="wrap">← 질문 활동으로 돌아가기</button></div>`:`<div class="row">
       <button class="btn" data-act="prev" ${idx===0?"disabled":""}>이전 단계</button>
       <button class="btn primary" data-act="next" ${idx===PHASES.length-1?"disabled":""}>다음 단계</button>
       <span class="grow"></span>
       <span class="small muted">제출 ${qs.length}명</span>
-      <button class="btn danger" data-act="newround">새 수업 시작</button>
+      <button class="btn danger" data-act="newround">다음 질문 활동 시작</button>
     </div>
     <div class="row">
       <span class="small muted">⭐ 추천 질문법 표시</span>
       <div class="chips">${METHODS.map(m=>`<button class="chip" data-act="method" data-v="${m.id}" aria-pressed="${sess.methodId===m.id}">${esc(m.name)}</button>`).join("")}</div>
     </div>
+    <div class="row"><button class="btn" data-act="unit">단원 마무리 열기 (활동별 남긴 질문 모아 보기)</button></div>`}
     ${msg && msg!=="ok" ? `<div class="notice ${/못했|최대/.test(msg)?"err":""}">${esc(msg)}</div>`:""}
   </div>`;
   let body = "";
-  if(p==="make"){
+  if(p==="unit"){
+    body = unitHtml();
+  } else if(p==="make"){
     const by = {}; METHODS.forEach(m=>by[m.id]=0); qs.forEach(q=>{ if(by[q.methodId]!=null) by[q.methodId]++; });
     const maxN = Math.max(1, ...Object.values(by));
     body = `<div class="stack">
@@ -619,12 +668,22 @@ function teacherView(){
       <div><h2 style="margin-bottom:10px">공개된 질문 (학생 화면과 같아요)</h2>${pubCards()}</div>
     </div>`;
   } else {
-    if(wrapDraft===null) wrapDraft = sess.wrap;
-    body = wrapHtml() + `<div class="card stack">
-      <label class="f" for="wrapin">한 줄 정리 고치기</label>
-      <textarea id="wrapin" data-f="wrap" maxlength="80">${esc(wrapDraft)}</textarea>
-      <div class="row"><button class="btn primary" data-act="savewrap">학생 화면에 반영</button></div>
-    </div>`;
+    if(wrapDraft===null) wrapDraft = hasKept()?sess.wrap:"";
+    const cand = qs.filter(q=>q.left && q.left.trim());
+    body = `<div class="stack">${wrapHtml()}
+      <div class="card stack">
+        <div class="row"><h3>오늘 남길 질문 고르기</h3><span class="grow"></span><span class="small muted">짝 대화 후 ‘아직 모르겠는 것’이에요</span></div>
+        ${cand.length? `<div class="qgrid">`+cand.map(q=>`<div class="qcard">
+          <div class="small muted">${esc(q.name||"이름 없음")}${q.methodId?` · ${esc(methodName(q.methodId))}`:""}</div>
+          <div class="left" style="font-size:19px">${esc(q.left)}</div>
+          <div class="row"><span class="grow"></span><button class="btn ${sess.wrap===q.left.slice(0,120)?"primary":""}" data-act="keep" data-v="${esc(q.id)}">${sess.wrap===q.left.slice(0,120)?"남기는 중 ★":"이 질문 남기기"}</button></div></div>`).join("")+`</div>` : `<div class="empty">남은 질문을 올린 학생이 아직 없어요.</div>`}
+        <label class="f" for="labelin">이 질문 활동의 소단원 이름 (선택)</label>
+        <input type="text" id="labelin" data-f="label" maxlength="40" value="${esc(labelDraft)}" placeholder="예: 소화와 에너지">
+        <label class="f" for="wrapin">또는 직접 쓰거나 고치기</label>
+        <textarea id="wrapin" data-f="wrap" maxlength="120">${esc(wrapDraft)}</textarea>
+        <div class="row"><button class="btn primary" data-act="savewrap">학생 화면에 반영</button>
+          <button class="btn" data-act="clearwrap">남긴 질문 비우기</button></div>
+      </div></div>`;
   }
   return `<div class="stack">${ctrl}${body}</div>`;
 }
@@ -728,6 +787,7 @@ function render(force){
 document.addEventListener("input", e=>{
   const f = e.target.dataset && e.target.dataset.f; if(!f) return;
   if(f==="wrap") { wrapDraft = e.target.value; return; }
+  if(f==="label") { labelDraft = e.target.value; return; }
   if(f==="nunit") { newUnit = e.target.value; return; }
   draft[f] = e.target.value;
   if(f==="first") saveDraftLocal();
@@ -781,11 +841,14 @@ document.addEventListener("click", e=>{
   else if(act==="timer") saveSess({pairEndsAt:Date.now()+sess.pairMin*60000});
   else if(act==="feat") toggleFeature(v);
   else if(act==="del"){ if(confirm("이 질문을 삭제할까요?")) deleteQuestion(v); }
-  else if(act==="savewrap"){ saveSess({wrap:(wrapDraft||"").trim()||DEFAULT_WRAP}); }
+  else if(act==="savewrap"){ const t=(wrapDraft||"").trim().slice(0,120); saveKept(t); saveSess({wrap:t||DEFAULT_WRAP}); }
+  else if(act==="keep"){ const q=roundQuestions().find(x=>x.id===v); if(q){ wrapDraft=q.left.slice(0,120); saveKept(wrapDraft); saveSess({wrap:wrapDraft}); } }
+  else if(act==="clearwrap"){ wrapDraft=""; saveKept(""); saveSess({wrap:DEFAULT_WRAP}); }
+  else if(act==="unit"){ msg=""; saveSess({phase:"unit"}); loadKept().then(()=>render(true)); }
   else if(act==="newround"){
-    if(confirm("새 수업을 시작할까요? 지금까지 공개한 질문과 정리 문장이 초기화돼요.")){
-      wrapDraft=null; mine=null; msg="";
-      saveSess({round:sess.round+1, phase:"make", pairEndsAt:0, featured:[], wrap:DEFAULT_WRAP});
+    if(confirm("다음 질문 활동을 시작할까요? 공개한 질문은 초기화되고, 남긴 질문은 다음 활동 첫 화면에 ‘지난 시간에 남긴 질문’으로 보여요.")){
+      wrapDraft=null; labelDraft=""; mine=null; msg="";
+      saveSess({round:sess.round+1, phase:"make", pairEndsAt:0, featured:[]});
     }
   }
   else if(act==="change"){ draft.change = v; render(true); }
@@ -846,7 +909,7 @@ function scheduleRefetch(){
   clearTimeout(refetchTimer);
   refetchTimer = setTimeout(async ()=>{
     await loadRooms(); await loadLive(); await followLive();
-    if(roomId){ await loadSession(); await loadQuestions(); }
+    if(roomId){ await loadSession(); await loadQuestions(); await loadKept(); }
     render();
   }, 250);
 }
@@ -869,6 +932,7 @@ async function connect(){
     sb.channel("sq-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"rooms"}, scheduleRefetch)
       .on("postgres_changes",{event:"*",schema:"public",table:"settings"}, scheduleRefetch)
+      .on("postgres_changes",{event:"*",schema:"public",table:"kept"}, scheduleRefetch)
       .on("postgres_changes",{event:"*",schema:"public",table:"questions"}, ()=>{ if(isTeacher) scheduleRefetch(); })
       .subscribe();
     // 실시간 연결이 끊겨도 따라오도록 보조 새로고침
@@ -880,7 +944,8 @@ async function connect(){
       if(!roomId){ const n = JSON.stringify(rooms); await loadRooms(); changed = changed || n !== JSON.stringify(rooms); }
       else {
         changed = await loadSession();
-        if(isTeacher && (sess.phase==="make"||sess.phase==="write"||sess.phase==="share")) { await loadQuestions(); changed = true; }
+        if(sess.phase==="unit" || isTeacher){ const kb=JSON.stringify(keptList); await loadKept(); if(kb!==JSON.stringify(keptList)) changed = true; }
+        if(isTeacher && (sess.phase==="make"||sess.phase==="write"||sess.phase==="share"||sess.phase==="wrap")) { await loadQuestions(); changed = true; }
       }
       if(changed) render();
     }, 6000);
