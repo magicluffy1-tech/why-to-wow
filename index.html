@@ -279,23 +279,38 @@ async function loadSession(){
 async function loadKept(){
   if(!roomId) return;
   if(!sb) return;
-  const {data, error} = await sb.from("kept").select("round,label,question").eq("room_id", roomId).order("round");
+  const {data, error} = await sb.from("kept").select("round,idx,label,question").eq("room_id", roomId).order("round").order("idx");
   if(!error && data) keptList = data;
 }
-async function saveKept(question){
+const keptOf = round => keptList.filter(k=>k.round===round).sort((a,b)=>(a.idx||1)-(b.idx||1));
+async function addKept(question){
   const q = (question||"").trim().slice(0,120);
-  const label = labelDraft.trim().slice(0,40);
-  if(!q){
-    keptList = keptList.filter(k=>k.round!==sess.round);
-    if(sb) await sb.from("kept").delete().eq("room_id",roomId).eq("round",sess.round);
-    return;
-  }
-  const row = {round:sess.round, label, question:q};
-  keptList = keptList.filter(k=>k.round!==sess.round).concat(row).sort((a,b)=>a.round-b.round);
+  if(!q) return;
+  const cur = keptOf(sess.round);
+  if(cur.some(k=>k.question===q)) return;
+  if(cur.length>=2){ msg="남기는 질문은 최대 2개예요. 하나를 빼고 골라 주세요."; render(true); return; }
+  const idx = cur.some(k=>k.idx===1) ? 2 : 1;
+  const row = {round:sess.round, idx, label:labelDraft.trim().slice(0,40), question:q};
+  keptList = keptList.concat(row);
+  msg = ""; render(true);
   if(sb){
-    const {error} = await sb.from("kept").upsert({room_id:roomId, ...row},{onConflict:"room_id,round"});
-    if(error){ msg="활동 기록을 저장하지 못했어요. setup.sql을 다시 실행했는지 확인해 주세요."; render(true); }
+    const {error} = await sb.from("kept").upsert({room_id:roomId, ...row},{onConflict:"room_id,round,idx"});
+    if(error){ msg="저장하지 못했어요. setup.sql을 다시 실행했는지 확인해 주세요."; render(true); }
   }
+}
+async function removeKept(question){
+  const k = keptOf(sess.round).find(x=>x.question===question); if(!k) return;
+  keptList = keptList.filter(x=>x!==k); render(true);
+  if(sb) await sb.from("kept").delete().eq("room_id",roomId).eq("round",k.round).eq("idx",k.idx);
+}
+async function clearKept(){
+  keptList = keptList.filter(k=>k.round!==sess.round); render(true);
+  if(sb) await sb.from("kept").delete().eq("room_id",roomId).eq("round",sess.round);
+}
+async function saveLabel(){
+  const label = labelDraft.trim().slice(0,40);
+  keptList.forEach(k=>{ if(k.round===sess.round) k.label=label; });
+  if(sb && keptOf(sess.round).length) await sb.from("kept").update({label}).eq("room_id",roomId).eq("round",sess.round);
 }
 async function loadQuestions(){
   if(!sb || !isTeacher || !roomId) return;
@@ -553,26 +568,30 @@ function pubCards(){
     </div>`).join("") + `</div>`;
 }
 function unitHtml(){
-  const list = keptList.slice().sort((a,b)=>a.round-b.round);
-  if(!list.length) return `<div class="card"><div class="empty" style="border:0">아직 남긴 질문이 없어요. 질문 활동의 마지막 단계에서 ‘이 질문 남기기’를 눌러 주세요.</div></div>`;
+  const rounds = [...new Set(keptList.map(k=>k.round))].sort((a,b)=>a-b);
+  if(!rounds.length) return `<div class="card"><div class="empty" style="border:0">아직 남긴 질문이 없어요. 질문 활동의 마지막 단계에서 함께 본 질문 중 남길 질문을 골라 주세요.</div></div>`;
   return `<div class="stack"><div class="card"><span class="tag">단원 마무리</span>
     <h2 style="margin-top:6px">우리 질문은 이렇게 이어졌어요</h2>
     <div class="small muted">질문 활동마다 남긴 질문을 순서대로 모았어요.</div></div>
-    ${list.map((k,i)=>`${i?'<div class="muted" style="text-align:center;font-size:22px" aria-hidden="true">↓</div>':""}
-      <div class="qcard pub"><div class="row"><span class="tag">질문 활동 ${i+1}</span>${k.label?`<b>${esc(k.label)}</b>`:""}</div>
-        <div class="left">${esc(k.question)}</div></div>`).join("")}</div>`;
+    ${rounds.map((r,i)=>{ const items = keptOf(r); const label = (items.find(k=>k.label)||{}).label||"";
+      return `${i?'<div class="muted" style="text-align:center;font-size:22px" aria-hidden="true">↓</div>':""}
+      <div class="qcard pub"><div class="row"><span class="tag">질문 활동 ${i+1}</span>${label?`<b>${esc(label)}</b>`:""}</div>
+        ${items.map(k=>`<div class="left">${esc(k.question)}</div>`).join("")}</div>`;}).join("")}</div>`;
 }
-const hasKept = () => sess.wrap && sess.wrap!==DEFAULT_WRAP;
+const hasKept = () => keptOf(sess.round).length>0;
 function wrapHtml(){
-  if(!hasKept()) return `<div class="card"><div class="empty" style="border:0">선생님이 오늘 남길 질문을 고르고 있어요.</div></div>`;
+  const items = keptOf(sess.round);
+  if(!items.length) return `<div class="card"><div class="empty" style="border:0">선생님이 오늘 남길 질문을 고르고 있어요.</div></div>`;
   return `<div class="card stack"><span class="tag">오늘 우리가 남긴 질문</span>
-    <div class="wrapline" style="padding:14px 6px">${esc(sess.wrap)}</div>
+    ${items.map(k=>`<div class="wrapline" style="padding:12px 6px">${esc(k.question)}</div>`).join("")}
     <div class="small muted" style="text-align:center">답이 없어도 괜찮아요. 다음 시간에 이 질문에서 다시 시작해요.</div></div>`;
 }
-// 지난 시간에 남긴 질문 (다음 수업 첫 화면에 표시)
+// 지난 활동에서 남긴 질문 (다음 활동 첫 화면에 표시)
 function keptBanner(){
-  return hasKept() ? `<div class="card" style="border-left:6px solid var(--mark)"><span class="tag">지난 시간에 남긴 질문</span>
-    <div class="serif" style="font-size:clamp(20px,3vw,26px);margin-top:6px">${esc(sess.wrap)}</div></div>` : "";
+  const prev = [...new Set(keptList.map(k=>k.round))].filter(r=>r<sess.round).sort((a,b)=>b-a)[0];
+  if(prev==null) return "";
+  return `<div class="card" style="border-left:6px solid var(--mark)"><span class="tag">지난 시간에 남긴 질문</span>
+    ${keptOf(prev).map(k=>`<div class="serif" style="font-size:clamp(20px,3vw,26px);margin-top:6px">${esc(k.question)}</div>`).join("")}</div>`;
 }
 
 /* ───────── 학생 화면 ───────── */
@@ -668,21 +687,23 @@ function teacherView(){
       <div><h2 style="margin-bottom:10px">공개된 질문 (학생 화면과 같아요)</h2>${pubCards()}</div>
     </div>`;
   } else {
-    if(wrapDraft===null) wrapDraft = hasKept()?sess.wrap:"";
-    const cand = qs.filter(q=>q.left && q.left.trim());
+    if(wrapDraft===null) wrapDraft = "";
+    const cand = sess.featured.filter(f=>f.left && f.left.trim());
+    const keptQs = new Set(keptOf(sess.round).map(k=>k.question));
     body = `<div class="stack">${wrapHtml()}
       <div class="card stack">
-        <div class="row"><h3>오늘 남길 질문 고르기</h3><span class="grow"></span><span class="small muted">짝 대화 후 ‘아직 모르겠는 것’이에요</span></div>
-        ${cand.length? `<div class="qgrid">`+cand.map(q=>`<div class="qcard">
-          <div class="small muted">${esc(q.name||"이름 없음")}${q.methodId?` · ${esc(methodName(q.methodId))}`:""}</div>
-          <div class="left" style="font-size:19px">${esc(q.left)}</div>
-          <div class="row"><span class="grow"></span><button class="btn ${sess.wrap===q.left.slice(0,120)?"primary":""}" data-act="keep" data-v="${esc(q.id)}">${sess.wrap===q.left.slice(0,120)?"남기는 중 ★":"이 질문 남기기"}</button></div></div>`).join("")+`</div>` : `<div class="empty">남은 질문을 올린 학생이 아직 없어요.</div>`}
+        <div class="row"><h3>함께 본 질문 중에서 남길 질문 고르기</h3><span class="grow"></span><span class="small muted">1~2개 · ${keptOf(sess.round).length}/2 선택</span></div>
+        ${cand.length? `<div class="qgrid">`+cand.map(f=>{ const q=f.left.slice(0,120), on=keptQs.has(q); return `<div class="qcard ${on?"pub":""}">
+          <div class="first">처음엔: ${esc(f.first)}</div>
+          <div class="left" style="font-size:19px">${esc(f.left)}</div>
+          <div class="row"><span class="grow"></span><button class="btn ${on?"primary":""}" data-act="keep" data-v="${esc(f.id)}">${on?"남기는 중 ★":"이 질문 남기기"}</button></div></div>`;}).join("")+`</div>` : `<div class="empty">‘함께 보기’에서 공개한 질문이 없어요. 아래에서 직접 써서 남길 수 있어요.</div>`}
         <label class="f" for="labelin">이 질문 활동의 소단원 이름 (선택)</label>
         <input type="text" id="labelin" data-f="label" maxlength="40" value="${esc(labelDraft)}" placeholder="예: 소화와 에너지">
-        <label class="f" for="wrapin">또는 직접 쓰거나 고치기</label>
+        <label class="f" for="wrapin">직접 써서 남기기 (선택)</label>
         <textarea id="wrapin" data-f="wrap" maxlength="120">${esc(wrapDraft)}</textarea>
-        <div class="row"><button class="btn primary" data-act="savewrap">학생 화면에 반영</button>
-          <button class="btn" data-act="clearwrap">남긴 질문 비우기</button></div>
+        <div class="row"><button class="btn" data-act="savewrap">이 질문도 남기기</button>
+          <button class="btn" data-act="clearwrap">남긴 질문 모두 비우기</button></div>
+        ${msg && msg!=="ok" ? `<div class="notice err">${esc(msg)}</div>`:""}
       </div></div>`;
   }
   return `<div class="stack">${ctrl}${body}</div>`;
@@ -798,6 +819,7 @@ document.addEventListener("keydown", e=>{
   if(e.key==="Enter" && e.target.id==="lpw") doLogin();
   if(e.key==="Enter" && e.target.id==="nunit") createRoom();
 });
+document.addEventListener("change", e=>{ if(e.target.dataset && e.target.dataset.f==="label") saveLabel(); });
 document.addEventListener("focusout", ()=>{ setTimeout(()=>{ if(pendingRender) render(); },50); });
 async function copyLink(){
   const url = siteLink();
@@ -841,9 +863,9 @@ document.addEventListener("click", e=>{
   else if(act==="timer") saveSess({pairEndsAt:Date.now()+sess.pairMin*60000});
   else if(act==="feat") toggleFeature(v);
   else if(act==="del"){ if(confirm("이 질문을 삭제할까요?")) deleteQuestion(v); }
-  else if(act==="savewrap"){ const t=(wrapDraft||"").trim().slice(0,120); saveKept(t); saveSess({wrap:t||DEFAULT_WRAP}); }
-  else if(act==="keep"){ const q=roundQuestions().find(x=>x.id===v); if(q){ wrapDraft=q.left.slice(0,120); saveKept(wrapDraft); saveSess({wrap:wrapDraft}); } }
-  else if(act==="clearwrap"){ wrapDraft=""; saveKept(""); saveSess({wrap:DEFAULT_WRAP}); }
+  else if(act==="savewrap"){ const t=(wrapDraft||"").trim(); wrapDraft=""; addKept(t); }
+  else if(act==="keep"){ const f=sess.featured.find(x=>x.id===v); if(f){ const q=f.left.slice(0,120); if(keptOf(sess.round).some(k=>k.question===q)) removeKept(q); else addKept(q); } }
+  else if(act==="clearwrap"){ wrapDraft=""; clearKept(); }
   else if(act==="unit"){ msg=""; saveSess({phase:"unit"}); loadKept().then(()=>render(true)); }
   else if(act==="newround"){
     if(confirm("다음 질문 활동을 시작할까요? 공개한 질문은 초기화되고, 남긴 질문은 다음 활동 첫 화면에 ‘지난 시간에 남긴 질문’으로 보여요.")){
@@ -944,7 +966,7 @@ async function connect(){
       if(!roomId){ const n = JSON.stringify(rooms); await loadRooms(); changed = changed || n !== JSON.stringify(rooms); }
       else {
         changed = await loadSession();
-        if(sess.phase==="unit" || isTeacher){ const kb=JSON.stringify(keptList); await loadKept(); if(kb!==JSON.stringify(keptList)) changed = true; }
+        if(true){ const kb=JSON.stringify(keptList); await loadKept(); if(kb!==JSON.stringify(keptList)) changed = true; }
         if(isTeacher && (sess.phase==="make"||sess.phase==="write"||sess.phase==="share"||sess.phase==="wrap")) { await loadQuestions(); changed = true; }
       }
       if(changed) render();
